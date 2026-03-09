@@ -128,6 +128,7 @@ CREATE TABLE public.user_roles (
 );
 CREATE TABLE public.users (
   id bigint NOT NULL DEFAULT nextval('users_id_seq'::regclass),
+  auth_id uuid UNIQUE,
   tenant_id bigint NOT NULL,
   email character varying NOT NULL,
   password_hash text NOT NULL,
