@@ -14,7 +14,10 @@ import {
   apiLogout,
   apiGetMe,
   apiRefresh,
-  isAdminRole,
+  apiRegisterTenant,
+  isOwnerOrAbove,
+  isSuperAdmin,
+  isMember,
 } from '../lib/api';
 
 interface AuthState {
@@ -28,8 +31,15 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, tenantId: string) => Promise<void>;
+  registerTenant: (
+    tenantName: string,
+    email: string,
+    password: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
+  isMemberRole: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -166,6 +176,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const registerTenant = useCallback(
+    async (tenantName: string, email: string, password: string) => {
+      setState((s) => ({ ...s, loading: true }));
+      try {
+        const data = await apiRegisterTenant(tenantName, email, password);
+        persistTokens(data.access_token, data.refresh_token);
+        setState({
+          user: data.user,
+          tenant: data.tenant,
+          accessToken: data.access_token,
+          loading: false,
+          initialized: true,
+        });
+      } catch (err) {
+        setState((s) => ({ ...s, loading: false }));
+        throw err;
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     if (state.accessToken) {
       await apiLogout(state.accessToken);
@@ -180,11 +211,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [state.accessToken]);
 
-  const isAdmin = state.user ? isAdminRole(state.user.role) : false;
+  const role = state.user?.role ?? '';
+  const isAdmin = isOwnerOrAbove(role);
+  const isPlatformAdmin = isSuperAdmin(role);
+  const isMemberRole = isMember(role);
 
   return (
     <AuthContext.Provider
-      value={{ ...state, login, signup, logout, isAdmin }}
+      value={{
+        ...state,
+        login,
+        signup,
+        registerTenant,
+        logout,
+        isAdmin,
+        isPlatformAdmin,
+        isMemberRole,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -1,13 +1,29 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../lib/api';
+
+interface Analytics {
+  total_members: number;
+  total_workouts: number;
+  active_subscriptions: number;
+}
 
 export default function Dashboard() {
-  const { user, tenant } = useAuth();
+  const { user, tenant, accessToken } = useAuth();
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    apiFetch('/api/admin/analytics', accessToken)
+      .then((r) => r.json())
+      .then(setAnalytics)
+      .catch(() => {});
+  }, [accessToken]);
 
   const stats = [
-    { label: 'Active Members', value: '\u2014', note: 'Connect data source' },
-    { label: 'Workouts This Week', value: '\u2014', note: 'Connect data source' },
-    { label: 'Revenue (MTD)', value: '\u2014', note: 'Connect data source' },
-    { label: 'New Sign-ups', value: '\u2014', note: 'Connect data source' },
+    { label: 'Active Members', value: analytics?.total_members ?? '\u2014' },
+    { label: 'Total Workouts', value: analytics?.total_workouts ?? '\u2014' },
+    { label: 'Active Subscriptions', value: analytics?.active_subscriptions ?? '\u2014' },
   ];
 
   return (
@@ -29,7 +45,6 @@ export default function Dashboard() {
           <div key={s.label} className="stat-card">
             <span className="stat-value">{s.value}</span>
             <span className="stat-label">{s.label}</span>
-            <span className="stat-note">{s.note}</span>
           </div>
         ))}
       </div>
@@ -38,8 +53,8 @@ export default function Dashboard() {
         <h2>Recent Activity</h2>
         <div className="empty-state">
           <p>
-            No activity data yet. Connect your data sources to populate this
-            dashboard.
+            Activity feed will show recent member signups, workouts, and
+            milestones.
           </p>
         </div>
       </section>

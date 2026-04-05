@@ -1,0 +1,152 @@
+# Google Cloud Build — builds and deploys all three services to Cloud Run.
+#
+# Required substitutions (set via trigger or --substitutions):
+#   _REGION              e.g. us-central1
+#   _SUPABASE_URL        your Supabase project URL
+#   _SUPABASE_ANON_KEY   your Supabase anon/public key
+#
+# Required secrets (set in Cloud Run or Secret Manager):
+#   SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET, SECRET_KEY,
+#   GEMINI_API_KEY, SENDGRID_API_KEY
+
+steps:
+  # ── 1. Build server image ──────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-server:$COMMIT_SHA"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-server:latest"
+      - "./server"
+
+  # ── 2. Build web-portal image ──────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-web-portal:$COMMIT_SHA"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-web-portal:latest"
+      - "--build-arg"
+      - "VITE_API_URL=https://aurafit-server-${_REGION}-$PROJECT_ID.a.run.app"
+      - "--build-arg"
+      - "VITE_SUPABASE_URL=${_SUPABASE_URL}"
+      - "--build-arg"
+      - "VITE_SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}"
+      - "./web-portal"
+
+  # ── 3. Build mobile image ─────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-mobile:$COMMIT_SHA"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/aurafit-mobile:latest"
+      - "--build-arg"
+      - "VITE_API_URL=https://aurafit-server-${_REGION}-$PROJECT_ID.a.run.app"
+      - "--build-arg"
+      - "VITE_SUPABASE_URL=${_SUPABASE_URL}"
+      - "--build-arg"
+      - "VITE_SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}"
+      - "./mobile"
+
+  # ── 4. Push all images ─────────────────────────────────
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-server:$COMMIT_SHA"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-server:latest"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-web-portal:$COMMIT_SHA"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-web-portal:latest"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-mobile:$COMMIT_SHA"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/aurafit-mobile:latest"]
+
+  # ── 5. Deploy server to Cloud Run ─────────────────────
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "aurafit-server"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/aurafit-server:$COMMIT_SHA"
+      - "--region"
+      - "${_REGION}"
+      - "--platform"
+      - "managed"
+      - "--port"
+      - "8080"
+      - "--allow-unauthenticated"
+      - "--memory"
+      - "512Mi"
+      - "--cpu"
+      - "1"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "5"
+      - "--set-env-vars"
+      - "PORT=8080,FLASK_DEBUG=0"
+
+  # ── 6. Deploy web-portal to Cloud Run ──────────────────
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "aurafit-web-portal"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/aurafit-web-portal:$COMMIT_SHA"
+      - "--region"
+      - "${_REGION}"
+      - "--platform"
+      - "managed"
+      - "--port"
+      - "8080"
+      - "--allow-unauthenticated"
+      - "--memory"
+      - "256Mi"
+      - "--cpu"
+      - "1"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "3"
+
+  # ── 7. Deploy mobile to Cloud Run ─────────────────────
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "aurafit-mobile"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/aurafit-mobile:$COMMIT_SHA"
+      - "--region"
+      - "${_REGION}"
+      - "--platform"
+      - "managed"
+      - "--port"
+      - "8080"
+      - "--allow-unauthenticated"
+      - "--memory"
+      - "256Mi"
+      - "--cpu"
+      - "1"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "3"
+
+images:
+  - "gcr.io/$PROJECT_ID/aurafit-server:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/aurafit-server:latest"
+  - "gcr.io/$PROJECT_ID/aurafit-web-portal:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/aurafit-web-portal:latest"
+  - "gcr.io/$PROJECT_ID/aurafit-mobile:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/aurafit-mobile:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

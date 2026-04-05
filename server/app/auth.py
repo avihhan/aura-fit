@@ -6,10 +6,17 @@ from supabase import Client, create_client
 
 bp = Blueprint("auth", __name__)
 
+ROLE_HIERARCHY = {
+    "super_admin": 3,
+    "owner": 2,
+    "member": 1,
+}
+
 
 # ---------------------------------------------------------------------------
 # Supabase client helper
 # ---------------------------------------------------------------------------
+
 
 def get_supabase_admin() -> Client:
     """Return a Supabase client authenticated with the service-role key."""
@@ -23,6 +30,7 @@ def get_supabase_admin() -> Client:
 # Auth middleware
 # ---------------------------------------------------------------------------
 
+
 def require_auth(f):
     """Verify Supabase JWT and attach user/tenant context to flask.g."""
 
@@ -35,7 +43,10 @@ def require_auth(f):
         token = header.removeprefix("Bearer ")
 
         try:
-            jwks_url = current_app.config["SUPABASE_URL"] + "/auth/v1/.well-known/jwks.json"
+            jwks_url = (
+                current_app.config["SUPABASE_URL"]
+                + "/auth/v1/.well-known/jwks.json"
+            )
             jwks_client = pyjwt.PyJWKClient(jwks_url)
             signing_key = jwks_client.get_signing_key_from_jwt(token)
 
@@ -78,18 +89,36 @@ def require_auth(f):
 
 
 def require_role(*allowed_roles):
-    """Must be applied after @require_auth so g.role is set."""
+    """Must be applied **after** @require_auth so g.role is set.
+
+    Supports hierarchical checks: super_admin inherits all permissions.
+    """
 
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            if g.get("role") not in allowed_roles:
-                return jsonify({"error": "Forbidden"}), 403
-            return f(*args, **kwargs)
+            user_role = g.get("role")
+            if user_role in allowed_roles:
+                return f(*args, **kwargs)
+            user_level = ROLE_HIERARCHY.get(user_role, 0)
+            max_required = max(ROLE_HIERARCHY.get(r, 0) for r in allowed_roles)
+            if user_level >= max_required:
+                return f(*args, **kwargs)
+            return jsonify({"error": "Forbidden"}), 403
 
         return decorated
 
     return decorator
+
+
+def is_platform_admin() -> bool:
+    """Check whether the current request user is a super_admin."""
+    return g.get("role") == "super_admin"
+
+
+# ---------------------------------------------------------------------------
+# Auth routes
+# ---------------------------------------------------------------------------
 
 
 @bp.route("/signup", methods=["POST"])
@@ -263,4 +292,92 @@ def forgot_password():
     except Exception:
         pass
 
-    return jsonify({"message": "If that email exists, a reset link has been sent"}), 200
+    return jsonify(
+        {"message": "If that email exists, a reset link has been sent"}
+    ), 200
+
+
+# ---------------------------------------------------------------------------
+# Tenant registration (creates tenant + owner in one step)
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/register-tenant", methods=["POST"])
+def register_tenant():
+    """Onboard a new fitness creator: create tenant row + owner user."""
+    body = request.get_json(silent=True) or {}
+
+    tenant_name = body.get("tenant_name", "").strip()
+    email = body.get("email", "").strip()
+    password = body.get("password", "")
+
+    if not tenant_name or not email or not password:
+        return (
+            jsonify({"error": "tenant_name, email, and password are required"}),
+            400,
+        )
+
+    sb = get_supabase_admin()
+
+    existing = (
+        sb.table("tenants")
+        .select("id")
+        .eq("email", email)
+        .maybe_single()
+        .execute()
+    )
+    if existing and existing.data:
+        return jsonify({"error": "A tenant with this email already exists"}), 409
+
+    tenant_result = (
+        sb.table("tenants")
+        .insert({"name": tenant_name, "email": email})
+        .execute()
+    )
+    if not tenant_result.data:
+        return jsonify({"error": "Failed to create tenant"}), 500
+
+    tenant = tenant_result.data[0]
+    tenant_id = tenant["id"]
+
+    try:
+        auth_resp = sb.auth.admin.create_user(
+            {"email": email, "password": password, "email_confirm": True}
+        )
+    except Exception as exc:
+        sb.table("tenants").delete().eq("id", tenant_id).execute()
+        return jsonify({"error": str(exc)}), 400
+
+    auth_user = auth_resp.user
+    if not auth_user:
+        sb.table("tenants").delete().eq("id", tenant_id).execute()
+        return jsonify({"error": "Failed to create auth user"}), 500
+
+    sb.table("users").insert(
+        {
+            "auth_id": str(auth_user.id),
+            "tenant_id": tenant_id,
+            "email": email,
+            "password_hash": "managed-by-supabase-auth",
+            "role": "owner",
+            "is_email_verified": True,
+        }
+    ).execute()
+
+    sign_in = sb.auth.sign_in_with_password(
+        {"email": email, "password": password}
+    )
+
+    return jsonify(
+        {
+            "access_token": sign_in.session.access_token,
+            "refresh_token": sign_in.session.refresh_token,
+            "user": {
+                "auth_id": str(auth_user.id),
+                "email": email,
+                "tenant_id": tenant_id,
+                "role": "owner",
+            },
+            "tenant": tenant,
+        }
+    ), 201

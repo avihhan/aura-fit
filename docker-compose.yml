@@ -1,0 +1,44 @@
+services:
+  # ── Flask API ──────────────────────────────────────────
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./server/.env
+    environment:
+      - PORT=8080
+      - FLASK_DEBUG=0
+    restart: unless-stopped
+
+  # ── Web Portal (Admin / Creator) ───────────────────────
+  web-portal:
+    build:
+      context: ./web-portal
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-https://your-project.supabase.co}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-your-anon-key}
+    ports:
+      - "3000:8080"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # ── Mobile Web App (Client / Trainee) ──────────────────
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-https://your-project.supabase.co}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-your-anon-key}
+    ports:
+      - "3001:8080"
+    depends_on:
+      - server
+    restart: unless-stopped

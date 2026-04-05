@@ -22,3 +22,6 @@ build/
 # Python
 *.egg-info/
 .eggs/
+
+# Docker
+docker-compose.override.yml

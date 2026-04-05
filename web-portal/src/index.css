@@ -427,3 +427,271 @@ body {
 .empty-state p {
   margin: 0;
 }
+
+/* --------------------------------------------------------
+   Login toggle group
+   -------------------------------------------------------- */
+
+.login-toggle-group {
+  margin-top: 1rem;
+}
+
+.login-toggle-group .login-toggle {
+  margin-top: 0.75rem;
+}
+
+/* --------------------------------------------------------
+   Platform admin nav link accent
+   -------------------------------------------------------- */
+
+.nav-link--platform {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.nav-link--platform.active {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+/* --------------------------------------------------------
+   Data table
+   -------------------------------------------------------- */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.data-table td {
+  padding: 0.625rem 0.75rem;
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.data-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* --------------------------------------------------------
+   Settings
+   -------------------------------------------------------- */
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-label {
+  font-size: 0.875rem;
+  color: #94a3b8;
+}
+
+.settings-value {
+  font-size: 0.875rem;
+  color: #e2e8f0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* --------------------------------------------------------
+   Exercise form
+   -------------------------------------------------------- */
+
+.exercise-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-group textarea {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group textarea:focus {
+  border-color: #6c63ff;
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* --------------------------------------------------------
+   AI Plans
+   -------------------------------------------------------- */
+
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.ai-form select {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.ai-result h3 {
+  font-size: 1.125rem;
+  color: #6c63ff;
+  margin-bottom: 1rem;
+}
+
+.ai-demo-badge {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  color: #fbbf24;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ai-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.ai-card strong {
+  color: #e2e8f0;
+}
+
+.ai-card ul {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.ai-card li {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.ai-macros {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* --------------------------------------------------------
+   Settings form
+   -------------------------------------------------------- */
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.color-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.color-input-wrap input[type="color"] {
+  width: 40px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-hex {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.save-badge {
+  font-size: 0.75rem;
+  color: #34d399;
+  font-weight: 600;
+}
+
+.logo-preview {
+  margin-top: 0.5rem;
+}
+
+.logo-preview img {
+  max-width: 120px;
+  max-height: 60px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.report-link {
+  color: #6c63ff;
+  font-size: 0.8125rem;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.report-link:hover {
+  text-decoration: underline;
+}
+
+.ai-totals {
+  padding: 0.75rem;
+  background: rgba(108, 99, 255, 0.08);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #c4b5fd;
+}

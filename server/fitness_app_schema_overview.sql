@@ -162,3 +162,6 @@ CREATE TABLE public.workout_logs (
   CONSTRAINT workout_logs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id),
   CONSTRAINT workout_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
+
+ALTER TABLE public.users
+ADD COLUMN IF NOT EXISTS auth_id uuid UNIQUE;

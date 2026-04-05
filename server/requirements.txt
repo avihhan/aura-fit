@@ -6,3 +6,12 @@ supabase==2.23.0
 
 # Auth
 pyjwt[crypto]>=2.8.0
+
+# AI (optional – demo plans returned when key is missing)
+google-generativeai>=0.8.0
+
+# Email (optional – logs to console when key is missing)
+sendgrid>=6.11.0
+
+# Production WSGI server
+gunicorn>=22.0.0

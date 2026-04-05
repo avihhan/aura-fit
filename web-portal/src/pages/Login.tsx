@@ -1,14 +1,20 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../lib/api';
+
+const MOBILE_APP_URL = import.meta.env.VITE_MOBILE_URL || 'http://localhost:3001';
+
+type Mode = 'login' | 'signup' | 'register';
 
 export default function Login() {
-  const { login, signup, user, loading, initialized } = useAuth();
+  const { login, signup, registerTenant, user, loading, initialized } = useAuth();
 
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantId, setTenantId] = useState('');
+  const [tenantName, setTenantName] = useState('');
   const [error, setError] = useState('');
 
   if (!initialized) {
@@ -24,11 +30,18 @@ export default function Login() {
   }
 
   if (user) {
+    if (user.role === ROLES.MEMBER) {
+      window.location.href = MOBILE_APP_URL;
+      return null;
+    }
+    if (user.role === ROLES.SUPER_ADMIN) {
+      return <Navigate to="/platform-admin/dashboard" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
-  function switchMode() {
-    setMode((m) => (m === 'login' ? 'signup' : 'login'));
+  function switchMode(next: Mode) {
+    setMode(next);
     setError('');
   }
 
@@ -41,23 +54,33 @@ export default function Login() {
       return;
     }
 
-    if (mode === 'signup' && !tenantId.trim()) {
-      setError('Please enter your Organization ID.');
-      return;
-    }
-
     try {
       if (mode === 'login') {
         await login(email.trim(), password);
-      } else {
+      } else if (mode === 'signup') {
+        if (!tenantId.trim()) {
+          setError('Please enter your Organization ID.');
+          return;
+        }
         await signup(email.trim(), password, tenantId.trim());
+      } else {
+        if (!tenantName.trim()) {
+          setError('Please enter your organization name.');
+          return;
+        }
+        await registerTenant(tenantName.trim(), email.trim(), password);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     }
   }
 
-  const isLogin = mode === 'login';
+  const subtitle =
+    mode === 'login'
+      ? 'Sign in to your account'
+      : mode === 'signup'
+        ? 'Join an existing organization'
+        : 'Create your fitness brand';
 
   return (
     <div className="login-page">
@@ -65,11 +88,26 @@ export default function Login() {
         <div className="login-brand">
           <div className="login-logo">A</div>
           <h1>AuraFit</h1>
-          <p>Admin Portal</p>
+          <p>{subtitle}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="login-error">{error}</div>}
+
+          {mode === 'register' && (
+            <div className="form-group">
+              <label htmlFor="tenantName">Organization Name</label>
+              <input
+                id="tenantName"
+                type="text"
+                value={tenantName}
+                onChange={(e) => setTenantName(e.target.value)}
+                placeholder="e.g. FitStudio Pro"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="email">Email</label>
@@ -80,7 +118,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
               autoComplete="email"
-              autoFocus
+              autoFocus={mode !== 'register'}
               disabled={loading}
             />
           </div>
@@ -92,13 +130,17 @@ export default function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={isLogin ? 'Enter your password' : 'Create a password'}
-              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              placeholder={
+                mode === 'login' ? 'Enter your password' : 'Create a password'
+              }
+              autoComplete={
+                mode === 'login' ? 'current-password' : 'new-password'
+              }
               disabled={loading}
             />
           </div>
 
-          {!isLogin && (
+          {mode === 'signup' && (
             <div className="form-group">
               <label htmlFor="tenantId">Organization ID</label>
               <input
@@ -114,26 +156,73 @@ export default function Login() {
 
           <button type="submit" className="login-btn" disabled={loading}>
             {loading
-              ? isLogin
+              ? mode === 'login'
                 ? 'Signing in\u2026'
-                : 'Creating account\u2026'
-              : isLogin
+                : mode === 'signup'
+                  ? 'Creating account\u2026'
+                  : 'Setting up\u2026'
+              : mode === 'login'
                 ? 'Sign In'
-                : 'Create Account'}
+                : mode === 'signup'
+                  ? 'Create Account'
+                  : 'Create Organization'}
           </button>
         </form>
 
-        <p className="login-toggle">
-          {isLogin ? "Don\u2019t have an account? " : 'Already have an account? '}
-          <button
-            type="button"
-            className="toggle-btn"
-            onClick={switchMode}
-            disabled={loading}
-          >
-            {isLogin ? 'Sign Up' : 'Sign In'}
-          </button>
-        </p>
+        <div className="login-toggle-group">
+          {mode === 'login' && (
+            <>
+              <p className="login-toggle">
+                Don&rsquo;t have an account?{' '}
+                <button
+                  type="button"
+                  className="toggle-btn"
+                  onClick={() => switchMode('signup')}
+                  disabled={loading}
+                >
+                  Sign Up
+                </button>
+              </p>
+              <p className="login-toggle">
+                Want to create a fitness brand?{' '}
+                <button
+                  type="button"
+                  className="toggle-btn"
+                  onClick={() => switchMode('register')}
+                  disabled={loading}
+                >
+                  Register as Creator
+                </button>
+              </p>
+            </>
+          )}
+          {mode === 'signup' && (
+            <p className="login-toggle">
+              Already have an account?{' '}
+              <button
+                type="button"
+                className="toggle-btn"
+                onClick={() => switchMode('login')}
+                disabled={loading}
+              >
+                Sign In
+              </button>
+            </p>
+          )}
+          {mode === 'register' && (
+            <p className="login-toggle">
+              Already have an account?{' '}
+              <button
+                type="button"
+                className="toggle-btn"
+                onClick={() => switchMode('login')}
+                disabled={loading}
+              >
+                Sign In
+              </button>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
