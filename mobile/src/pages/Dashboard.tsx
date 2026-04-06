@@ -44,20 +44,29 @@ export default function Dashboard() {
   useEffect(() => {
     if (!accessToken) return;
     apiFetch('/api/nutrition', accessToken)
-      .then((r) => r.json())
-      .then((d) => setRecentMeals(d.nutrition_logs ?? []))
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((d) => { if (d) setRecentMeals(d.nutrition_logs ?? []); })
       .catch(() => {})
       .finally(() => setLoadingN(false));
 
     apiFetch('/api/workouts', accessToken)
-      .then((r) => r.json())
-      .then((d) => setWorkouts(d.workouts ?? []))
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((d) => { if (d) setWorkouts(d.workouts ?? []); })
       .catch(() => {})
       .finally(() => setLoadingW(false));
 
     apiFetch('/api/streaks', accessToken)
-      .then((r) => r.json())
-      .then(setStreak)
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((d) => { if (d) setStreak(d); })
       .catch(() => {});
   }, [accessToken]);
 
