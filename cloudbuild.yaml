@@ -14,7 +14,7 @@ steps:
     args:
       - "build"
       - "-t"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:${_TAG}"
       - "-t"
       - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:latest"
       - "./server"
@@ -24,7 +24,7 @@ steps:
     args:
       - "build"
       - "-t"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:${_TAG}"
       - "-t"
       - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:latest"
       - "--build-arg"
@@ -40,7 +40,7 @@ steps:
     args:
       - "build"
       - "-t"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:${_TAG}"
       - "-t"
       - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:latest"
       - "--build-arg"
@@ -53,15 +53,15 @@ steps:
 
   # ── 4. Push all images to Artifact Registry ────────────
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:$COMMIT_SHA"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:${_TAG}"]
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:latest"]
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:$COMMIT_SHA"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:${_TAG}"]
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:latest"]
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:$COMMIT_SHA"]
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:${_TAG}"]
   - name: "gcr.io/cloud-builders/docker"
     args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:latest"]
 
@@ -72,7 +72,7 @@ steps:
       - "deploy"
       - "aurafit-server"
       - "--image"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:${_TAG}"
       - "--region"
       - "${_REGION}"
       - "--platform"
@@ -88,8 +88,8 @@ steps:
       - "0"
       - "--max-instances"
       - "5"
-      - "--set-env-vars"
-      - "FLASK_DEBUG=0,CORS_ORIGINS=${_WEB_PORTAL_URL},${_MOBILE_URL}"
+      - "--update-env-vars"
+      - "^;;^FLASK_DEBUG=0;;CORS_ORIGINS=${_WEB_PORTAL_URL},${_MOBILE_URL}"
 
   # ── 6. Deploy web-portal to Cloud Run ──────────────────
   - name: "gcr.io/cloud-builders/gcloud"
@@ -98,7 +98,7 @@ steps:
       - "deploy"
       - "aurafit-web-portal"
       - "--image"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:${_TAG}"
       - "--region"
       - "${_REGION}"
       - "--platform"
@@ -122,7 +122,7 @@ steps:
       - "deploy"
       - "aurafit-mobile"
       - "--image"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:$COMMIT_SHA"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:${_TAG}"
       - "--region"
       - "${_REGION}"
       - "--platform"
@@ -140,12 +140,15 @@ steps:
       - "3"
 
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:${_TAG}"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-server:latest"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:${_TAG}"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-web-portal:latest"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:${_TAG}"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/aurafit/aurafit-mobile:latest"
+
+substitutions:
+  _TAG: latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
