@@ -73,7 +73,7 @@ export default function BodyMetrics() {
 
   return (
     <div className="page">
-      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="page-header page-header-row">
         <h1>Body Metrics</h1>
         <button className="action-btn" onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ Log'}

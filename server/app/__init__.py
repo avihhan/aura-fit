@@ -20,6 +20,9 @@ def create_app() -> Flask:
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        # Android emulator → host machine (mobile web + WebView)
+        "http://10.0.2.2:3000",
+        "http://10.0.2.2:3001",
     ]
     extra = os.environ.get("CORS_ORIGINS", "")
     if extra:

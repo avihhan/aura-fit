@@ -18,3 +18,5 @@ python run.py
 ```
 
 API base: `http://localhost:5000`
+
+pushed to gcp artifact

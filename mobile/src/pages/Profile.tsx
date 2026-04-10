@@ -14,7 +14,7 @@ interface UserProfile {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, accessToken, logout } = useAuth();
+  const { user, accessToken } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -73,9 +73,6 @@ export default function Profile() {
             <button className="profile-nav-btn" onClick={() => navigate('/notifications')}>Notifications</button>
           </div>
 
-          <button className="logout-btn" onClick={logout}>
-            Log Out
-          </button>
         </section>
       )}
     </div>
