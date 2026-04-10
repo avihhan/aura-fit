@@ -177,6 +177,13 @@ def signup():
     sign_in = sb.auth.sign_in_with_password(
         {"email": email, "password": password}
     )
+    tenant_row = (
+        sb.table("tenants")
+        .select("id, name, logo_url, primary_color, secondary_color")
+        .eq("id", tenant_id)
+        .maybe_single()
+        .execute()
+    )
 
     return jsonify(
         {
@@ -184,10 +191,12 @@ def signup():
             "refresh_token": sign_in.session.refresh_token,
             "user": {
                 "auth_id": str(auth_user.id),
+                "id": str(auth_user.id),
                 "email": email,
                 "tenant_id": tenant_id,
                 "role": "member",
             },
+            "tenant": tenant_row.data if tenant_row.data else None,
         }
     ), 201
 

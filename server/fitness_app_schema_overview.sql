@@ -111,6 +111,7 @@ CREATE TABLE public.tenants (
   id bigint NOT NULL DEFAULT nextval('tenants_id_seq'::regclass),
   name character varying NOT NULL,
   email character varying NOT NULL UNIQUE,
+  registration_code character varying(6),
   logo_url text,
   primary_color character varying,
   secondary_color character varying,

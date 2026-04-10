@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     id              bigint    NOT NULL DEFAULT nextval('tenants_id_seq'::regclass),
     name            varchar   NOT NULL,
     email           varchar   NOT NULL UNIQUE,
+    registration_code varchar(6),
     logo_url        text,
     primary_color   varchar,
     secondary_color varchar,
@@ -36,6 +37,9 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     created_at      timestamp DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT tenants_pkey PRIMARY KEY (id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS tenants_registration_code_key
+ON public.tenants (registration_code);
 
 -- ============================================================================
 -- 2. USERS  (FK -> tenants)

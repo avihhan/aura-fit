@@ -163,12 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const data = await apiSignup(email, password, registrationCode);
         persistTokens(data.access_token, data.refresh_token);
-
-        const me = await apiGetMe(data.access_token);
         setState({
-          user: me.user,
-          tenant: me.tenant,
-          billingGate: me.billing_gate ?? null,
+          user: data.user,
+          tenant: data.tenant,
+          billingGate: null,
           accessToken: data.access_token,
           loading: false,
           initialized: true,
