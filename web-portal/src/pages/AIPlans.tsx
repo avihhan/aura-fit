@@ -31,6 +31,12 @@ interface WorkoutPlan {
   _demo?: boolean;
 }
 
+interface AiMeta {
+  provider: string;
+  is_demo: boolean;
+  warning?: string | null;
+}
+
 type Tab = 'meal' | 'workout';
 
 export default function AIPlans() {
@@ -41,16 +47,22 @@ export default function AIPlans() {
   const [dietaryPrefs, setDietaryPrefs] = useState('');
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [loadingMeal, setLoadingMeal] = useState(false);
+  const [mealError, setMealError] = useState('');
+  const [mealWarning, setMealWarning] = useState('');
 
   const [workoutGoal, setWorkoutGoal] = useState('');
   const [fitnessLevel, setFitnessLevel] = useState('intermediate');
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [loadingWorkout, setLoadingWorkout] = useState(false);
+  const [workoutError, setWorkoutError] = useState('');
+  const [workoutWarning, setWorkoutWarning] = useState('');
 
   async function generateMealPlan() {
     if (!accessToken) return;
     setLoadingMeal(true);
     setMealPlan(null);
+    setMealError('');
+    setMealWarning('');
     try {
       const res = await apiFetch('/api/ai/meal-plan', accessToken, {
         method: 'POST',
@@ -59,9 +71,19 @@ export default function AIPlans() {
           dietary_prefs: dietaryPrefs || undefined,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to generate meal plan');
+      }
+      const meta: AiMeta | undefined = data.ai_meta;
+      if (meta?.warning) setMealWarning(meta.warning);
+      if (!data.meal_plan) {
+        throw new Error('Server returned an invalid meal plan response');
+      }
       setMealPlan(data.meal_plan);
-    } catch { /* swallow */ }
+    } catch (err) {
+      setMealError(err instanceof Error ? err.message : 'Unable to generate meal plan');
+    }
     setLoadingMeal(false);
   }
 
@@ -69,6 +91,8 @@ export default function AIPlans() {
     if (!accessToken) return;
     setLoadingWorkout(true);
     setWorkoutPlan(null);
+    setWorkoutError('');
+    setWorkoutWarning('');
     try {
       const res = await apiFetch('/api/ai/workout-plan', accessToken, {
         method: 'POST',
@@ -77,9 +101,19 @@ export default function AIPlans() {
           fitness_level: fitnessLevel || undefined,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to generate workout plan');
+      }
+      const meta: AiMeta | undefined = data.ai_meta;
+      if (meta?.warning) setWorkoutWarning(meta.warning);
+      if (!data.workout_plan) {
+        throw new Error('Server returned an invalid workout plan response');
+      }
       setWorkoutPlan(data.workout_plan);
-    } catch { /* swallow */ }
+    } catch (err) {
+      setWorkoutError(err instanceof Error ? err.message : 'Unable to generate workout plan');
+    }
     setLoadingWorkout(false);
   }
 
@@ -113,6 +147,8 @@ export default function AIPlans() {
               {loadingMeal ? 'Generating\u2026' : 'Generate Meal Plan'}
             </button>
           </div>
+          {mealError && <p className="ai-demo-badge">{mealError}</p>}
+          {mealWarning && <p className="ai-demo-badge">{mealWarning}</p>}
 
           {mealPlan && (
             <div className="ai-result" style={{ marginTop: '1.5rem' }}>
@@ -163,6 +199,8 @@ export default function AIPlans() {
               {loadingWorkout ? 'Generating\u2026' : 'Generate Workout Plan'}
             </button>
           </div>
+          {workoutError && <p className="ai-demo-badge">{workoutError}</p>}
+          {workoutWarning && <p className="ai-demo-badge">{workoutWarning}</p>}
 
           {workoutPlan && (
             <div className="ai-result" style={{ marginTop: '1.5rem' }}>

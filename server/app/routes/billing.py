@@ -15,6 +15,15 @@ from app.services.lemon_squeezy_service import (
 )
 
 bp = Blueprint("billing", __name__)
+
+
+def _is_postgrest_missing_response(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "missing response" in text and (
+        "'code': '204'" in text or '"code": "204"' in text
+    )
+
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -98,12 +107,16 @@ def create_my_checkout():
         user_created_at=created_at,
         trial_days=config["trial_days"],
     )
-    sb.table("tenant_member_billing_status").update(
-        {
-            "last_checkout_url": checkout["checkout_url"],
-            "last_checkout_at": _utc_now_iso(),
-        }
-    ).eq("tenant_id", g.tenant_id).eq("user_id", g.user_id).execute()
+    try:
+        sb.table("tenant_member_billing_status").update(
+            {
+                "last_checkout_url": checkout["checkout_url"],
+                "last_checkout_at": _utc_now_iso(),
+            }
+        ).eq("tenant_id", g.tenant_id).eq("user_id", g.user_id).execute()
+    except Exception as exc:
+        if not _is_postgrest_missing_response(exc):
+            raise
 
     return jsonify({"checkout_url": checkout["checkout_url"]}), 201
 
@@ -180,8 +193,12 @@ def lemon_webhook():
     elif event_name in {"subscription_cancelled", "subscription_expired"}:
         status_update["status"] = "cancelled"
 
-    sb.table("tenant_member_billing_status").update(status_update).eq(
-        "tenant_id", tenant_id
-    ).eq("user_id", user_id).execute()
+    try:
+        sb.table("tenant_member_billing_status").update(status_update).eq(
+            "tenant_id", tenant_id
+        ).eq("user_id", user_id).execute()
+    except Exception as exc:
+        if not _is_postgrest_missing_response(exc):
+            raise
 
     return jsonify({"message": "ok"})

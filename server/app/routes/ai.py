@@ -44,12 +44,12 @@ def _active_goal(user_id: str, tenant_id: int) -> str | None:
 @require_auth
 def generate_meal_plan():
     """Generate a personalised meal plan using AI."""
-    from app.services.ai_service import generate_meal_plan as _gen
+    from app.services.ai_service import generate_meal_plan_with_meta as _gen
 
     body = request.get_json(silent=True) or {}
     metrics = _latest_metrics(g.user_id, g.tenant_id)
 
-    plan = _gen(
+    result = _gen(
         goal=body.get("goal") or _active_goal(g.user_id, g.tenant_id),
         weight=metrics.get("weight"),
         height=metrics.get("height"),
@@ -57,7 +57,7 @@ def generate_meal_plan():
         dietary_prefs=body.get("dietary_prefs"),
         extra=body.get("extra"),
     )
-    return jsonify({"meal_plan": plan})
+    return jsonify({"meal_plan": result["plan"], "ai_meta": result["meta"]})
 
 
 # ---------------------------------------------------------------------------
@@ -69,12 +69,12 @@ def generate_meal_plan():
 @require_auth
 def generate_workout_plan():
     """Generate a personalised workout plan using AI."""
-    from app.services.ai_service import generate_workout_plan as _gen
+    from app.services.ai_service import generate_workout_plan_with_meta as _gen
 
     body = request.get_json(silent=True) or {}
     metrics = _latest_metrics(g.user_id, g.tenant_id)
 
-    plan = _gen(
+    result = _gen(
         goal=body.get("goal") or _active_goal(g.user_id, g.tenant_id),
         weight=metrics.get("weight"),
         height=metrics.get("height"),
@@ -82,4 +82,4 @@ def generate_workout_plan():
         fitness_level=body.get("fitness_level"),
         extra=body.get("extra"),
     )
-    return jsonify({"workout_plan": plan})
+    return jsonify({"workout_plan": result["plan"], "ai_meta": result["meta"]})

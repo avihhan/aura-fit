@@ -31,6 +31,12 @@ interface WorkoutPlan {
   _demo?: boolean;
 }
 
+interface AiMeta {
+  provider: string;
+  is_demo: boolean;
+  warning?: string | null;
+}
+
 type Tab = 'meal' | 'workout';
 
 export default function AIPlans() {
@@ -40,23 +46,39 @@ export default function AIPlans() {
   const [mealGoal, setMealGoal] = useState('');
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [loadingMeal, setLoadingMeal] = useState(false);
+  const [mealError, setMealError] = useState('');
+  const [mealWarning, setMealWarning] = useState('');
 
   const [workoutGoal, setWorkoutGoal] = useState('');
   const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
   const [loadingWorkout, setLoadingWorkout] = useState(false);
+  const [workoutError, setWorkoutError] = useState('');
+  const [workoutWarning, setWorkoutWarning] = useState('');
 
   async function genMeal() {
     if (!accessToken) return;
     setLoadingMeal(true);
     setMealPlan(null);
+    setMealError('');
+    setMealWarning('');
     try {
       const res = await apiFetch('/api/ai/meal-plan', accessToken, {
         method: 'POST',
         body: JSON.stringify({ goal: mealGoal || undefined }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to generate meal plan');
+      }
+      const meta: AiMeta | undefined = data.ai_meta;
+      if (meta?.warning) setMealWarning(meta.warning);
+      if (!data.meal_plan) {
+        throw new Error('Server returned an invalid meal plan response');
+      }
       setMealPlan(data.meal_plan);
-    } catch { /* */ }
+    } catch (err) {
+      setMealError(err instanceof Error ? err.message : 'Unable to generate meal plan');
+    }
     setLoadingMeal(false);
   }
 
@@ -64,14 +86,26 @@ export default function AIPlans() {
     if (!accessToken) return;
     setLoadingWorkout(true);
     setWorkoutPlan(null);
+    setWorkoutError('');
+    setWorkoutWarning('');
     try {
       const res = await apiFetch('/api/ai/workout-plan', accessToken, {
         method: 'POST',
         body: JSON.stringify({ goal: workoutGoal || undefined }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to generate workout plan');
+      }
+      const meta: AiMeta | undefined = data.ai_meta;
+      if (meta?.warning) setWorkoutWarning(meta.warning);
+      if (!data.workout_plan) {
+        throw new Error('Server returned an invalid workout plan response');
+      }
       setWorkoutPlan(data.workout_plan);
-    } catch { /* */ }
+    } catch (err) {
+      setWorkoutError(err instanceof Error ? err.message : 'Unable to generate workout plan');
+    }
     setLoadingWorkout(false);
   }
 
@@ -97,6 +131,8 @@ export default function AIPlans() {
               {loadingMeal ? 'Generating\u2026' : 'Generate'}
             </button>
           </div>
+          {mealError && <p className="login-error" style={{ marginTop: '0.75rem' }}>{mealError}</p>}
+          {mealWarning && <p className="ai-demo-tag">{mealWarning}</p>}
 
           {mealPlan && (
             <div style={{ marginTop: '1rem' }}>
@@ -133,6 +169,8 @@ export default function AIPlans() {
               {loadingWorkout ? 'Generating\u2026' : 'Generate'}
             </button>
           </div>
+          {workoutError && <p className="login-error" style={{ marginTop: '0.75rem' }}>{workoutError}</p>}
+          {workoutWarning && <p className="ai-demo-tag">{workoutWarning}</p>}
 
           {workoutPlan && (
             <div style={{ marginTop: '1rem' }}>

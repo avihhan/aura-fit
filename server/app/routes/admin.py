@@ -11,6 +11,18 @@ bp = Blueprint("admin", __name__)
 
 def _is_postgrest_missing_response(exc: Exception) -> bool:
     text = str(exc).lower()
+    return "missing response" in text and (
+        "'code': '204'" in text or '"code": "204"' in text
+    )
+
+
+def _is_missing_billing_table(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "pgrst205" in text and "tenant_billing_configs" in text
+
+
+def _is_postgrest_missing_response(exc: Exception) -> bool:
+    text = str(exc).lower()
     return "missing response" in text and "'code': '204'" in text
 
 
@@ -307,19 +319,40 @@ def update_billing_settings():
             sb.table("tenant_billing_configs")
             .select("id")
             .eq("tenant_id", g.tenant_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if existing.data:
-            sb.table("tenant_billing_configs").update(payload).eq(
-                "tenant_id", g.tenant_id
-            ).execute()
+        has_existing = bool(existing.data and len(existing.data) > 0)
+        if has_existing:
+            try:
+                sb.table("tenant_billing_configs").update(payload).eq(
+                    "tenant_id", g.tenant_id
+                ).execute()
+            except Exception as exc:
+                if not _is_postgrest_missing_response(exc):
+                    raise
         else:
-            sb.table("tenant_billing_configs").insert(payload).execute()
+            try:
+                sb.table("tenant_billing_configs").insert(payload).execute()
+            except Exception as exc:
+                if not _is_postgrest_missing_response(exc):
+                    raise
 
         return jsonify({"billing": get_tenant_billing_config(sb, g.tenant_id)})
-    except Exception:
+    except Exception as exc:
         current_app.logger.exception("Failed to update tenant billing settings")
+        if _is_missing_billing_table(exc):
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "Billing tables are missing in Supabase. "
+                            "Run server/migrations/004_tenant_billing.sql in the same project as SUPABASE_URL."
+                        )
+                    }
+                ),
+                500,
+            )
         return (
             jsonify({"error": "Unable to save billing settings. Ensure migration 004 is applied."}),
             500,

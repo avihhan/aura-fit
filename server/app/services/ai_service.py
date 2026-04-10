@@ -3,8 +3,9 @@ AI Service — uses Google Gemini to generate personalised
 meal plans and workout plans based on user context.
 
 Set GEMINI_API_KEY in your .env to enable real generation.
-When the key is missing the service returns deterministic demo plans
-so the rest of the stack can be developed / tested without a live key.
+Set GEMINI_MODEL to override the default model name.
+When Gemini fails/unavailable, service returns deterministic demo plans
+with metadata describing the fallback reason.
 """
 
 from __future__ import annotations
@@ -14,20 +15,38 @@ import os
 from typing import Any
 
 
-def _gemini_model():
+def _normalize_model_name(model_name: str) -> str:
+    raw = (model_name or "").strip().lower().replace("_", "-")
+    # User-friendly aliases
+    aliases = {
+        "1.5-pro": "gemini-1.5-pro",
+        "gemini-1.5-pro": "gemini-1.5-pro",
+        "gemini 1.5 pro": "gemini-1.5-pro",
+        "3.1-pro": "gemini-2.5-pro",
+        "gemini-3.1-pro": "gemini-2.5-pro",
+        "gemini 3.1 pro": "gemini-2.5-pro",
+        "2.5-pro": "gemini-2.5-pro",
+        "gemini-2.5-pro": "gemini-2.5-pro",
+    }
+    return aliases.get(raw, raw or "gemini-1.5-pro")
+
+
+def _gemini_client():
     """Lazy-import so the app boots even without the package installed."""
     try:
         import google.generativeai as genai
     except ImportError:
-        return None
+        return None, [], "Gemini SDK not installed on server"
     key = os.getenv("GEMINI_API_KEY", "")
     if not key:
-        return None
+        return None, [], "GEMINI_API_KEY is not configured"
+    configured_model = _normalize_model_name(os.getenv("GEMINI_MODEL", "gemini-1.5-pro"))
+    # Try configured model first, then a pro fallback.
+    model_candidates = [configured_model]
+    if configured_model != "gemini-1.5-pro":
+        model_candidates.append("gemini-1.5-pro")
     genai.configure(api_key=key)
-    return genai.GenerativeModel(
-        "gemini-2.0-flash",
-        generation_config={"response_mime_type": "application/json"},
-    )
+    return genai, model_candidates, None
 
 
 # ---------------------------------------------------------------------------
@@ -88,36 +107,107 @@ def _build_user_context(
 # ---------------------------------------------------------------------------
 
 
-def generate_meal_plan(**kwargs: Any) -> dict:
-    """Return a meal-plan dict. Uses Gemini when available, else a demo plan."""
-    model = _gemini_model()
+def _response_meta(*, is_demo: bool, warning: str | None = None) -> dict[str, Any]:
+    return {
+        "provider": "gemini",
+        "is_demo": is_demo,
+        "model": os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
+        "warning": warning,
+    }
+
+
+def generate_meal_plan_with_meta(**kwargs: Any) -> dict[str, Any]:
+    """Return meal plan and metadata, with explicit fallback reason."""
+    genai, model_candidates, model_warning = _gemini_client()
     context = _build_user_context(**kwargs)
 
-    if model is not None:
+    if genai is not None:
         prompt = _MEAL_PLAN_PROMPT.format(context=context)
-        try:
-            resp = model.generate_content(prompt)
-            return json.loads(resp.text or "{}")
-        except (json.JSONDecodeError, Exception):
-            pass
+        errors: list[str] = []
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(
+                    model_name,
+                    generation_config={"response_mime_type": "application/json"},
+                )
+                resp = model.generate_content(prompt)
+                parsed = json.loads(resp.text or "{}")
+                if isinstance(parsed, dict) and parsed:
+                    parsed["_demo"] = False
+                    return {
+                        "plan": parsed,
+                        "meta": {
+                            "provider": "gemini",
+                            "is_demo": False,
+                            "model": model_name,
+                            "warning": None,
+                        },
+                    }
+                errors.append(f"{model_name}: empty response")
+            except json.JSONDecodeError:
+                errors.append(f"{model_name}: non-JSON response")
+            except Exception as exc:
+                errors.append(f"{model_name}: {str(exc)[:160]}")
+        warning = "Gemini request failed; using demo plan. " + " | ".join(errors[:2])
+    else:
+        warning = model_warning or "Gemini unavailable; using demo plan"
 
-    return _demo_meal_plan(kwargs.get("goal"))
+    return {
+        "plan": _demo_meal_plan(kwargs.get("goal")),
+        "meta": _response_meta(is_demo=True, warning=warning),
+    }
+
+
+def generate_workout_plan_with_meta(**kwargs: Any) -> dict[str, Any]:
+    """Return workout plan and metadata, with explicit fallback reason."""
+    genai, model_candidates, model_warning = _gemini_client()
+    context = _build_user_context(**kwargs)
+
+    if genai is not None:
+        prompt = _WORKOUT_PLAN_PROMPT.format(context=context)
+        errors: list[str] = []
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(
+                    model_name,
+                    generation_config={"response_mime_type": "application/json"},
+                )
+                resp = model.generate_content(prompt)
+                parsed = json.loads(resp.text or "{}")
+                if isinstance(parsed, dict) and parsed:
+                    parsed["_demo"] = False
+                    return {
+                        "plan": parsed,
+                        "meta": {
+                            "provider": "gemini",
+                            "is_demo": False,
+                            "model": model_name,
+                            "warning": None,
+                        },
+                    }
+                errors.append(f"{model_name}: empty response")
+            except json.JSONDecodeError:
+                errors.append(f"{model_name}: non-JSON response")
+            except Exception as exc:
+                errors.append(f"{model_name}: {str(exc)[:160]}")
+        warning = "Gemini request failed; using demo plan. " + " | ".join(errors[:2])
+    else:
+        warning = model_warning or "Gemini unavailable; using demo plan"
+
+    return {
+        "plan": _demo_workout_plan(kwargs.get("goal")),
+        "meta": _response_meta(is_demo=True, warning=warning),
+    }
+
+
+def generate_meal_plan(**kwargs: Any) -> dict:
+    """Backward-compatible helper returning only the plan."""
+    return generate_meal_plan_with_meta(**kwargs)["plan"]
 
 
 def generate_workout_plan(**kwargs: Any) -> dict:
-    """Return a workout-plan dict. Uses Gemini when available, else a demo plan."""
-    model = _gemini_model()
-    context = _build_user_context(**kwargs)
-
-    if model is not None:
-        prompt = _WORKOUT_PLAN_PROMPT.format(context=context)
-        try:
-            resp = model.generate_content(prompt)
-            return json.loads(resp.text or "{}")
-        except (json.JSONDecodeError, Exception):
-            pass
-
-    return _demo_workout_plan(kwargs.get("goal"))
+    """Backward-compatible helper returning only the plan."""
+    return generate_workout_plan_with_meta(**kwargs)["plan"]
 
 
 # ---------------------------------------------------------------------------
