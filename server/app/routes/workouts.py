@@ -1,5 +1,6 @@
 from flask import Blueprint, g, jsonify, request
 from app.auth import get_supabase_admin, require_auth
+from app.services.user_notifications_service import send_workout_completion_email
 
 bp = Blueprint("workouts", __name__)
 
@@ -131,7 +132,7 @@ def add_exercise(workout_id):
     sb = get_supabase_admin()
     workout = (
         sb.table("workout_logs")
-        .select("id")
+        .select("id, workout_date")
         .eq("id", workout_id)
         .eq("tenant_id", g.tenant_id)
         .eq("user_id", g.user_id)
@@ -154,6 +155,21 @@ def add_exercise(workout_id):
     result = sb.table("workout_exercises").insert(row).execute()
     if not result.data:
         return jsonify({"error": "Insert failed"}), 500
+
+    existing_count = (
+        sb.table("workout_exercises")
+        .select("id", count="exact")
+        .eq("workout_log_id", workout_id)
+        .execute()
+    )
+    if (existing_count.count or 0) == 1:
+        send_workout_completion_email(
+            sb,
+            tenant_id=g.tenant_id,
+            user_id=g.user_id,
+            workout_date=str(workout.data.get("workout_date")),
+            exercise_name=exercise_name,
+        )
     return jsonify({"exercise": result.data[0]}), 201
 
 

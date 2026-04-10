@@ -1,5 +1,6 @@
 from flask import Blueprint, g, jsonify, request
 from app.auth import get_supabase_admin, require_auth
+from app.services.user_notifications_service import send_plan_opt_in_email
 
 bp = Blueprint("goals", __name__)
 
@@ -26,7 +27,16 @@ def create_goal():
     result = sb.table("goals").insert(row).execute()
     if not result.data:
         return jsonify({"error": "Insert failed"}), 500
-    return jsonify({"goal": result.data[0]}), 201
+
+    goal = result.data[0]
+    if str(goal.get("status", "")).lower() == "active":
+        send_plan_opt_in_email(
+            sb,
+            tenant_id=g.tenant_id,
+            user_id=g.user_id,
+            goal_type=goal.get("goal_type") or "fitness",
+        )
+    return jsonify({"goal": goal}), 201
 
 
 @bp.route("/goals", methods=["GET"])

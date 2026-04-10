@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import { apiFetch, apiFetchJson, getApiCache, invalidateApiCache } from '../lib/api';
 
 interface NutritionLog {
   id: number;
@@ -25,13 +25,26 @@ export default function Nutrition() {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
 
   function fetchLogs() {
     if (!accessToken) return;
-    apiFetch('/api/nutrition', accessToken)
-      .then((r) => r.json())
+    const cached = getApiCache<{ nutrition_logs?: NutritionLog[] }>(
+      '/api/nutrition',
+      accessToken,
+      45000,
+    );
+    if (cached) {
+      setLogs(cached.data.nutrition_logs ?? []);
+      setLoading(false);
+    }
+    apiFetchJson<{ nutrition_logs?: NutritionLog[] }>('/api/nutrition', accessToken, {
+      forceRefresh: true,
+      retries: 1,
+    })
       .then((d) => setLogs(d.nutrition_logs ?? []))
-      .catch(() => {})
+      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load logs'))
       .finally(() => setLoading(false));
   }
 
@@ -41,18 +54,23 @@ export default function Nutrition() {
     e.preventDefault();
     if (!accessToken) return;
     setSaving(true);
+    setError('');
 
-    await apiFetch('/api/nutrition', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        logged_at: new Date().toISOString(),
-        meal_type: mealType,
-        calories: calories ? Number(calories) : undefined,
-        protein: protein ? Number(protein) : undefined,
-        carbs: carbs ? Number(carbs) : undefined,
-        fats: fats ? Number(fats) : undefined,
-      }),
-    });
+    try {
+      await apiFetch('/api/nutrition', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          logged_at: new Date().toISOString(),
+          meal_type: mealType,
+          calories: calories ? Number(calories) : undefined,
+          protein: protein ? Number(protein) : undefined,
+          carbs: carbs ? Number(carbs) : undefined,
+          fats: fats ? Number(fats) : undefined,
+        }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save nutrition log');
+    }
 
     setCalories('');
     setProtein('');
@@ -60,6 +78,7 @@ export default function Nutrition() {
     setFats('');
     setSaving(false);
     setShowForm(false);
+    invalidateApiCache('/api/nutrition', accessToken);
     fetchLogs();
   }
 
@@ -79,6 +98,12 @@ export default function Nutrition() {
           {showForm ? 'Cancel' : '+ Log'}
         </button>
       </header>
+
+      {error && (
+        <section className="section">
+          <p className="empty-text" style={{ color: '#fca5a5' }}>{error}</p>
+        </section>
+      )}
 
       <div className="card-grid">
         <div className="card"><span className="card-label">Calories</span><span className="card-value">{todayCals}</span></div>
@@ -131,12 +156,27 @@ export default function Nutrition() {
         <section className="section">
           <h2>Recent Meals</h2>
           {logs.slice(0, 20).map((l) => (
-            <div key={l.id} className="log-row">
+            <div
+              key={l.id}
+              className="card nutrition-log-card"
+              style={{ marginBottom: '0.6rem', cursor: 'pointer' }}
+              onClick={() => setExpandedLogId((prev) => (prev === l.id ? null : l.id))}
+            >
               <div>
                 <span className="log-primary">{l.meal_type ?? 'Meal'}</span>
-                <span className="log-secondary">{l.logged_at?.slice(0, 10)}</span>
+                <span className="log-secondary">{new Date(l.logged_at).toLocaleString()}</span>
               </div>
               <span className="log-value">{l.calories ?? 0} kcal</span>
+              {expandedLogId === l.id && (
+                <div className="nutrition-detail-grid">
+                  <span className="log-secondary">Protein</span>
+                  <span className="log-value">{l.protein ?? 0} g</span>
+                  <span className="log-secondary">Carbs</span>
+                  <span className="log-value">{l.carbs ?? 0} g</span>
+                  <span className="log-secondary">Fats</span>
+                  <span className="log-value">{l.fats ?? 0} g</span>
+                </div>
+              )}
             </div>
           ))}
         </section>

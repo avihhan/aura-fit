@@ -799,6 +799,25 @@ body {
   white-space: nowrap;
 }
 
+.nutrition-log-card {
+  transition: border-color 0.2s ease, transform 0.1s ease;
+}
+
+.nutrition-log-card:active {
+  transform: scale(0.995);
+}
+
+.nutrition-detail-grid,
+.metric-row-grid {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+}
+
 .text-muted {
   color: var(--text-dim);
   font-size: 0.8125rem;

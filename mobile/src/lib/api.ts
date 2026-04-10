@@ -251,6 +251,21 @@ export async function apiCreateWorkout(
   return body.workout as WorkoutLog;
 }
 
+export async function apiUpdateEmailNotifications(
+  accessToken: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const res = await apiFetch('/api/users/me', accessToken, {
+    method: 'PUT',
+    body: JSON.stringify({ email_notifications_enabled: enabled }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.user) {
+    throw new Error(body.error || 'Unable to update notifications preference');
+  }
+  return Boolean(body.user.email_notifications_enabled);
+}
+
 export async function apiGetWorkoutDetail(
   accessToken: string,
   workoutId: number,

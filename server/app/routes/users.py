@@ -11,7 +11,7 @@ def get_user():
     sb = get_supabase_admin()
     user_row = (
         sb.table("users")
-        .select("created_at, is_email_verified")
+        .select("created_at, is_email_verified, email_notifications_enabled")
         .eq("id", g.user_id)
         .eq("tenant_id", g.tenant_id)
         .maybe_single()
@@ -40,6 +40,9 @@ def get_user():
                 "role": g.role,
                 "is_email_verified": (user_row.data or {}).get("is_email_verified", False),
                 "created_at": (user_row.data or {}).get("created_at"),
+                "email_notifications_enabled": (user_row.data or {}).get(
+                    "email_notifications_enabled", True
+                ),
             },
             "tenant": tenant_row.data if tenant_row.data else None,
             "billing_gate": {
@@ -62,6 +65,10 @@ def update_user():
         allowed["email"] = body["email"].strip()
     if "two_factor_enabled" in body:
         allowed["two_factor_enabled"] = bool(body["two_factor_enabled"])
+    if "email_notifications_enabled" in body:
+        allowed["email_notifications_enabled"] = bool(
+            body["email_notifications_enabled"]
+        )
 
     if not allowed:
         return jsonify({"error": "No updatable fields provided"}), 400

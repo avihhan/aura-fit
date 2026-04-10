@@ -13,6 +13,8 @@ interface Metric {
   id: number;
   weight: number | null;
   height: number | null;
+  height_feet: number | null;
+  height_inches: number | null;
   body_fat_percentage: number | null;
   recorded_at: string;
 }
@@ -23,9 +25,11 @@ export default function BodyMetrics() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
+  const [heightFeet, setHeightFeet] = useState('');
+  const [heightInches, setHeightInches] = useState('');
   const [bodyFat, setBodyFat] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   function fetchMetrics() {
     if (!accessToken) return;
@@ -44,7 +48,9 @@ export default function BodyMetrics() {
       retries: 1,
     })
       .then((d) => setMetrics(d.body_metrics ?? []))
-      .catch(() => {})
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Unable to load body metrics');
+      })
       .finally(() => setLoading(false));
   }
 
@@ -54,19 +60,26 @@ export default function BodyMetrics() {
     e.preventDefault();
     if (!accessToken) return;
     setSaving(true);
+    setError('');
 
-    await apiFetch('/api/body-metrics', accessToken, {
-      method: 'POST',
-      body: JSON.stringify({
-        recorded_at: new Date().toISOString(),
-        weight: weight ? Number(weight) : undefined,
-        height: height ? Number(height) : undefined,
-        body_fat_percentage: bodyFat ? Number(bodyFat) : undefined,
-      }),
-    });
+    try {
+      await apiFetch('/api/body-metrics', accessToken, {
+        method: 'POST',
+        body: JSON.stringify({
+          recorded_at: new Date().toISOString(),
+          weight: weight ? Number(weight) : undefined,
+          height_feet: heightFeet ? Number(heightFeet) : undefined,
+          height_inches: heightInches ? Number(heightInches) : undefined,
+          body_fat_percentage: bodyFat ? Number(bodyFat) : undefined,
+        }),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save body metric');
+    }
 
     setWeight('');
-    setHeight('');
+    setHeightFeet('');
+    setHeightInches('');
     setBodyFat('');
     setSaving(false);
     setShowForm(false);
@@ -82,6 +95,16 @@ export default function BodyMetrics() {
       bf: m.body_fat_percentage,
     }));
 
+  function formatHeight(metric: Metric) {
+    if (metric.height_feet != null || metric.height_inches != null) {
+      return `${metric.height_feet ?? 0} ft ${metric.height_inches ?? 0} in`;
+    }
+    if (metric.height != null) {
+      return `${metric.height} in`;
+    }
+    return '--';
+  }
+
   return (
     <div className="page">
       <header className="page-header page-header-row">
@@ -90,6 +113,12 @@ export default function BodyMetrics() {
           {showForm ? 'Cancel' : '+ Log'}
         </button>
       </header>
+
+      {error && (
+        <section className="section">
+          <p className="empty-text" style={{ color: '#fca5a5' }}>{error}</p>
+        </section>
+      )}
 
       {showForm && (
         <section className="section">
@@ -100,9 +129,15 @@ export default function BodyMetrics() {
                 <input id="bm-wt" type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} disabled={saving} />
               </div>
               <div className="form-group">
-                <label htmlFor="bm-ht">Height</label>
-                <input id="bm-ht" type="number" step="0.1" value={height} onChange={(e) => setHeight(e.target.value)} disabled={saving} />
+                <label htmlFor="bm-ft">Height (ft)</label>
+                <input id="bm-ft" type="number" min="0" max="9" value={heightFeet} onChange={(e) => setHeightFeet(e.target.value)} disabled={saving} />
               </div>
+              <div className="form-group">
+                <label htmlFor="bm-in">Height (in)</label>
+                <input id="bm-in" type="number" min="0" max="11" value={heightInches} onChange={(e) => setHeightInches(e.target.value)} disabled={saving} />
+              </div>
+            </div>
+            <div className="form-row-2">
               <div className="form-group">
                 <label htmlFor="bm-bf">Body Fat %</label>
                 <input id="bm-bf" type="number" step="0.1" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} disabled={saving} />
@@ -136,17 +171,17 @@ export default function BodyMetrics() {
         <section className="section">
           <h2>History</h2>
           {metrics.slice(0, 20).map((m) => (
-            <div key={m.id} className="log-row">
+            <div key={m.id} className="card" style={{ marginBottom: '0.6rem' }}>
               <div>
-                <span className="log-primary">{m.recorded_at?.slice(0, 10)}</span>
+                <span className="log-primary">{new Date(m.recorded_at).toLocaleString()}</span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                {m.weight != null && <span className="log-value">{m.weight} lbs</span>}
-                {m.body_fat_percentage != null && (
-                  <span className="log-secondary" style={{ marginLeft: '0.5rem' }}>
-                    {m.body_fat_percentage}% BF
-                  </span>
-                )}
+              <div className="metric-row-grid">
+                <span className="log-secondary">Weight</span>
+                <span className="log-value">{m.weight != null ? `${m.weight} lbs` : '--'}</span>
+                <span className="log-secondary">Height</span>
+                <span className="log-value">{formatHeight(m)}</span>
+                <span className="log-secondary">Body Fat</span>
+                <span className="log-value">{m.body_fat_percentage != null ? `${m.body_fat_percentage}%` : '--'}</span>
               </div>
             </div>
           ))}
