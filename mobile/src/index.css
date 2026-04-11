@@ -964,6 +964,12 @@ body {
   align-items: center;
 }
 
+.nutrition-ring-visual {
+  position: relative;
+  width: 142px;
+  height: 142px;
+}
+
 .nutrition-ring-svg {
   transform: rotate(-90deg);
 }
@@ -979,12 +985,13 @@ body {
 }
 
 .nutrition-ring-value {
-  margin-top: -96px;
-  min-height: 62px;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  pointer-events: none;
 }
 
 .nutrition-ring-value strong {
@@ -999,16 +1006,18 @@ body {
 }
 
 .nutrition-ring-label {
-  margin: 0;
-  font-size: 0.82rem;
+  margin: 0.28rem 0 0;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text);
+  text-align: center;
 }
 
 .nutrition-ring-target {
-  margin: 0.22rem 0 0;
+  margin: 0.42rem 0 0;
   font-size: 0.74rem;
   color: var(--text-dim);
+  text-align: center;
 }
 
 .nutrition-detail-grid,

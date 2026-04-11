@@ -30,31 +30,33 @@ function TargetRing({
 
   return (
     <div className="nutrition-ring-card">
-      <svg width={size} height={size} className="nutrition-ring-svg" role="img" aria-label={label}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          className="nutrition-ring-track"
-          strokeWidth={stroke}
-          fill="none"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          className="nutrition-ring-progress"
-          strokeWidth={stroke}
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          fill="none"
-        />
-      </svg>
-      <div className="nutrition-ring-value">
-        <strong>{Math.round(consumed)}</strong>
-        <span>{unit}</span>
+      <div className="nutrition-ring-visual">
+        <svg width={size} height={size} className="nutrition-ring-svg" role="img" aria-label={label}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            className="nutrition-ring-track"
+            strokeWidth={stroke}
+            fill="none"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            className="nutrition-ring-progress"
+            strokeWidth={stroke}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            fill="none"
+          />
+        </svg>
+        <div className="nutrition-ring-value">
+          <strong>{Math.round(consumed)}</strong>
+          <span>{unit}</span>
+          <p className="nutrition-ring-label">{label}</p>
+        </div>
       </div>
-      <p className="nutrition-ring-label">{label}</p>
       <p className="nutrition-ring-target">
         {target && target > 0 ? `Target: ${target} ${unit}` : 'Set Body Metrics questionnaire'}
       </p>
