@@ -13,6 +13,60 @@ ALLOWED_ACTIVITY_LEVEL = {"sedentary", "light", "moderate", "very_active", "extr
 ALLOWED_GOAL = {"lose", "maintain", "gain"}
 
 
+def _is_missing_column_error(exc: Exception, column_name: str) -> bool:
+    text = str(exc).lower()
+    return (
+        "could not find the" in text
+        and "column" in text
+        and column_name.lower() in text
+        and "schema cache" in text
+    )
+
+
+def _body_metrics_insert_with_fallback(sb, row: dict):
+    try:
+        return sb.table("body_metrics").insert(row).execute()
+    except Exception as exc:
+        if not (
+            _is_missing_column_error(exc, "height_feet")
+            or _is_missing_column_error(exc, "height_inches")
+        ):
+            raise
+        legacy_row = dict(row)
+        legacy_row.pop("height_feet", None)
+        legacy_row.pop("height_inches", None)
+        return sb.table("body_metrics").insert(legacy_row).execute()
+
+
+def _body_metrics_update_with_fallback(sb, metric_id: int, tenant_id: int, user_id: int, allowed: dict):
+    try:
+        return (
+            sb.table("body_metrics")
+            .update(allowed)
+            .eq("id", metric_id)
+            .eq("tenant_id", tenant_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if not (
+            _is_missing_column_error(exc, "height_feet")
+            or _is_missing_column_error(exc, "height_inches")
+        ):
+            raise
+        legacy_allowed = dict(allowed)
+        legacy_allowed.pop("height_feet", None)
+        legacy_allowed.pop("height_inches", None)
+        return (
+            sb.table("body_metrics")
+            .update(legacy_allowed)
+            .eq("id", metric_id)
+            .eq("tenant_id", tenant_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+
 def _normalize_height_fields(payload: dict) -> tuple[int | None, int | None, float | None]:
     feet = payload.get("height_feet")
     inches = payload.get("height_inches")
@@ -116,7 +170,7 @@ def create_body_metric():
         row["body_fat_percentage"] = body["body_fat_percentage"]
 
     sb = get_supabase_admin()
-    result = sb.table("body_metrics").insert(row).execute()
+    result = _body_metrics_insert_with_fallback(sb, row)
 
     if not result.data:
         return jsonify({"error": "Insert failed"}), 500
@@ -226,13 +280,8 @@ def update_body_metric(metric_id):
         return jsonify({"error": "No updatable fields provided"}), 400
 
     sb = get_supabase_admin()
-    result = (
-        sb.table("body_metrics")
-        .update(allowed)
-        .eq("id", metric_id)
-        .eq("tenant_id", g.tenant_id)
-        .eq("user_id", g.user_id)
-        .execute()
+    result = _body_metrics_update_with_fallback(
+        sb, metric_id, g.tenant_id, g.user_id, allowed
     )
 
     if not result.data:
