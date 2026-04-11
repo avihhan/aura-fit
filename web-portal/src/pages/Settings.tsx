@@ -42,6 +42,130 @@ interface LemonVariant {
   product_id: string | null;
 }
 
+interface BrandingPreset {
+  id: string;
+  label: string;
+  primary: string;
+  secondary: string;
+  background: string;
+  widget: string;
+}
+
+const BRANDING_PRESETS: BrandingPreset[] = [
+  {
+    id: 'foundation-light',
+    label: 'Foundation Light (Default)',
+    primary: '#333333',
+    secondary: '#f5f5f5',
+    background: '#ffffff',
+    widget: '#f5f5f5',
+  },
+  {
+    id: 'clean-slate',
+    label: 'Clean Slate',
+    primary: '#2f2f2f',
+    secondary: '#ebebeb',
+    background: '#ffffff',
+    widget: '#f0f0f0',
+  },
+  {
+    id: 'soft-contrast',
+    label: 'Soft Contrast',
+    primary: '#3b3b3b',
+    secondary: '#ececec',
+    background: '#ffffff',
+    widget: '#f3f3f3',
+  },
+  {
+    id: 'midnight-minimal',
+    label: 'Midnight Minimal',
+    primary: '#f5f5f5',
+    secondary: '#1f2937',
+    background: '#0f172a',
+    widget: '#1e293b',
+  },
+  {
+    id: 'ocean-clean',
+    label: 'Ocean Clean',
+    primary: '#0f4c81',
+    secondary: '#dbeafe',
+    background: '#eff6ff',
+    widget: '#dbeafe',
+  },
+  {
+    id: 'forest-balance',
+    label: 'Forest Balance',
+    primary: '#1f7a4c',
+    secondary: '#dcfce7',
+    background: '#f0fdf4',
+    widget: '#dcfce7',
+  },
+  {
+    id: 'sunset-slate',
+    label: 'Sunset Slate',
+    primary: '#7c2d12',
+    secondary: '#ffedd5',
+    background: '#fff7ed',
+    widget: '#ffedd5',
+  },
+  {
+    id: 'violet-frost',
+    label: 'Violet Frost',
+    primary: '#5b21b6',
+    secondary: '#ede9fe',
+    background: '#f5f3ff',
+    widget: '#ede9fe',
+  },
+  {
+    id: 'teal-clarity',
+    label: 'Teal Clarity',
+    primary: '#0f766e',
+    secondary: '#ccfbf1',
+    background: '#f0fdfa',
+    widget: '#ccfbf1',
+  },
+  {
+    id: 'rose-neutral',
+    label: 'Rose Neutral',
+    primary: '#9f1239',
+    secondary: '#ffe4e6',
+    background: '#fff1f2',
+    widget: '#ffe4e6',
+  },
+];
+
+function findPresetByColors(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+  background: string | null | undefined,
+  widget: string | null | undefined,
+): BrandingPreset | null {
+  const n = (v: string | null | undefined) => (v || '').trim().toLowerCase();
+  return (
+    BRANDING_PRESETS.find(
+      (preset) =>
+        preset.primary.toLowerCase() === n(primary) &&
+        preset.secondary.toLowerCase() === n(secondary) &&
+        preset.background.toLowerCase() === n(background) &&
+        preset.widget.toLowerCase() === n(widget),
+    ) ?? null
+  );
+}
+
+function publicUrlFromSignedUpload(sign: {
+  signed_upload_url: string | null;
+  bucket: string;
+  object_path: string;
+}): string | null {
+  if (!sign.signed_upload_url) return null;
+  try {
+    const parsed = new URL(sign.signed_upload_url);
+    return `${parsed.origin}/storage/v1/object/public/${sign.bucket}/${sign.object_path}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function Settings() {
   const { user, accessToken } = useAuth();
   const [branding, setBranding] = useState<Branding | null>(null);
@@ -53,6 +177,7 @@ export default function Settings() {
   const [secondaryColor, setSecondaryColor] = useState('#f5f5f5');
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
   const [widgetBackgroundColor, setWidgetBackgroundColor] = useState('#f5f5f5');
+  const [selectedPresetId, setSelectedPresetId] = useState(BRANDING_PRESETS[0].id);
   const [registrationCode, setRegistrationCode] = useState('');
   const [resettingCode, setResettingCode] = useState(false);
   const [codeStatus, setCodeStatus] = useState('');
@@ -93,11 +218,22 @@ export default function Settings() {
           setBranding(b);
           setName(b.name ?? '');
           setLogoUrl(b.logo_url ?? '');
-          setPrimaryColor(b.primary_color ?? '#333333');
-          setSecondaryColor(b.secondary_color ?? '#f5f5f5');
-          setBackgroundColor(b.background_color ?? '#ffffff');
-          setWidgetBackgroundColor(b.widget_background_color ?? '#f5f5f5');
+          const preset = findPresetByColors(
+            b.primary_color,
+            b.secondary_color,
+            b.background_color,
+            b.widget_background_color,
+          );
+          const picked = preset ?? BRANDING_PRESETS[0];
+          setSelectedPresetId(picked.id);
+          setPrimaryColor(picked.primary);
+          setSecondaryColor(picked.secondary);
+          setBackgroundColor(picked.background);
+          setWidgetBackgroundColor(picked.widget);
           setRegistrationCode(b.registration_code ?? '');
+          if (!preset) {
+            setBrandingStatus('Custom colors detected. Select a preset and save to apply.');
+          }
         }
       })
       .catch(() => {});
@@ -133,23 +269,32 @@ export default function Settings() {
     setSaved(false);
     setBrandingStatus('');
 
-    await apiFetch('/api/admin/branding', accessToken, {
-      method: 'PUT',
-      body: JSON.stringify({
-        name: name.trim(),
-        logo_url: logoUrl.trim() || null,
-        primary_color: primaryColor,
-        secondary_color: secondaryColor,
-        background_color: backgroundColor,
-        widget_background_color: widgetBackgroundColor,
-      }),
-    });
-
-    setSaving(false);
-    setSaved(true);
-    setBrandingStatus('Branding saved');
-    setTimeout(() => setSaved(false), 3000);
-    setTimeout(() => setBrandingStatus(''), 3000);
+    try {
+      const res = await apiFetch('/api/admin/branding', accessToken, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: name.trim(),
+          logo_url: logoUrl.trim() || null,
+          primary_color: primaryColor,
+          secondary_color: secondaryColor,
+          background_color: backgroundColor,
+          widget_background_color: widgetBackgroundColor,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || 'Failed to save branding');
+      }
+      setSaved(true);
+      setBrandingStatus('Branding saved');
+      setTimeout(() => setSaved(false), 3000);
+      setTimeout(() => setBrandingStatus(''), 3000);
+    } catch (err) {
+      setBrandingStatus(err instanceof Error ? err.message : 'Failed to save branding');
+      setTimeout(() => setBrandingStatus(''), 4000);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleUploadLogo() {
@@ -186,9 +331,14 @@ export default function Settings() {
         }
       }
       if (!sign.public_url) {
-        throw new Error('Logo public URL not available from upload response');
+        const fallbackPublic = publicUrlFromSignedUpload(sign);
+        if (!fallbackPublic) {
+          throw new Error('Logo upload succeeded but public URL could not be resolved');
+        }
+        setLogoUrl(fallbackPublic);
+      } else {
+        setLogoUrl(sign.public_url);
       }
-      setLogoUrl(sign.public_url);
       setLogoFile(null);
       setBrandingStatus('Logo uploaded. Click Save Branding to publish it.');
       setSaved(true);
@@ -200,6 +350,16 @@ export default function Settings() {
     } finally {
       setLogoUploading(false);
     }
+  }
+
+  function handlePresetChange(presetId: string) {
+    const preset = BRANDING_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setSelectedPresetId(preset.id);
+    setPrimaryColor(preset.primary);
+    setSecondaryColor(preset.secondary);
+    setBackgroundColor(preset.background);
+    setWidgetBackgroundColor(preset.widget);
   }
 
   async function handleSaveBilling(e: FormEvent) {
@@ -285,10 +445,19 @@ export default function Settings() {
       const res = await apiFetch('/api/admin/weekly-summary', accessToken, {
         method: 'POST',
       });
-      const data = await res.json();
-      setSummaryStatus(`Sent to ${data.sent}/${data.total_members} members`);
-    } catch {
-      setSummaryStatus('Failed to send');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send weekly summaries');
+      }
+      const sent = Number(data.sent ?? 0);
+      const total = Number(data.total_members ?? 0);
+      const skipped = Number(data.skipped ?? 0);
+      const failed = Number(data.failed ?? 0);
+      setSummaryStatus(
+        `Weekly summaries: sent ${sent}/${total} (skipped ${skipped}, failed ${failed})`,
+      );
+    } catch (err) {
+      setSummaryStatus(err instanceof Error ? err.message : 'Failed to send');
     }
     setTimeout(() => setSummaryStatus(''), 5000);
   }
@@ -389,44 +558,39 @@ export default function Settings() {
           </div>
           <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label htmlFor="s-pc">Primary Color</label>
-              <div className="color-input-wrap">
-                <input id="s-pc" type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} disabled={saving} />
-                <span className="color-hex">{primaryColor}</span>
-              </div>
+              <label htmlFor="s-preset">Client Color Theme</label>
+              <select
+                id="s-preset"
+                className="form-select"
+                value={selectedPresetId}
+                onChange={(e) => handlePresetChange(e.target.value)}
+                disabled={saving}
+              >
+                {BRANDING_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="form-group">
-              <label htmlFor="s-sc">Secondary Color</label>
+              <label>Preset Colors</label>
               <div className="color-input-wrap">
-                <input id="s-sc" type="color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} disabled={saving} />
-                <span className="color-hex">{secondaryColor}</span>
+                <span className="color-hex">Primary: {primaryColor}</span>
+                <span className="color-hex">Secondary: {secondaryColor}</span>
               </div>
             </div>
           </div>
           <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
-              <label htmlFor="s-bg">App Background Color</label>
+              <label>App Background</label>
               <div className="color-input-wrap">
-                <input
-                  id="s-bg"
-                  type="color"
-                  value={backgroundColor}
-                  onChange={(e) => setBackgroundColor(e.target.value)}
-                  disabled={saving}
-                />
                 <span className="color-hex">{backgroundColor}</span>
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="s-wbg">Widget Background Color</label>
+              <label>Widget Background</label>
               <div className="color-input-wrap">
-                <input
-                  id="s-wbg"
-                  type="color"
-                  value={widgetBackgroundColor}
-                  onChange={(e) => setWidgetBackgroundColor(e.target.value)}
-                  disabled={saving}
-                />
                 <span className="color-hex">{widgetBackgroundColor}</span>
               </div>
             </div>

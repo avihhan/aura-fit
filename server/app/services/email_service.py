@@ -63,38 +63,91 @@ def send_weekly_summary(
     *,
     to: str,
     user_name: str,
-    workouts_count: int,
-    streak: int,
-    calories_avg: int,
     tenant_name: str = "AuraFit",
+    week_start: str,
+    week_end: str,
+    summary: dict[str, Any],
+    branding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build and send a weekly summary email."""
+    """Build and send a weekly engagement summary email."""
+    branding = branding or {}
+    primary_color = branding.get("primary_color") or "#333333"
+    secondary_color = branding.get("secondary_color") or "#f5f5f5"
+    logo_url = branding.get("logo_url")
+
+    workouts = summary.get("workouts", {})
+    nutrition = summary.get("nutrition", {})
+    body_metrics = summary.get("body_metrics", {})
+    goals = summary.get("goals", {})
+
+    def _fmt(raw, suffix: str = "") -> str:
+        if raw is None:
+            return "N/A"
+        return f"{raw}{suffix}"
+
+    logo_markup = (
+        f'<img src="{logo_url}" alt="{tenant_name} logo" style="height:42px;max-width:180px;object-fit:contain;" />'
+        if logo_url
+        else f'<span style="font-size:20px;font-weight:700;color:{primary_color};">{tenant_name}</span>'
+    )
+
     html = f"""
-    <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;">
-      <h2 style="color:#6c63ff;">Your Weekly Summary</h2>
-      <p>Hey {user_name},</p>
-      <p>Here's how your week went at <strong>{tenant_name}</strong>:</p>
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Workouts</strong></td>
-          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">{workouts_count}</td>
-        </tr>
-        <tr>
-          <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Current Streak</strong></td>
-          <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">{streak} days</td>
-        </tr>
-        <tr>
-          <td style="padding:8px;"><strong>Avg Daily Calories</strong></td>
-          <td style="padding:8px;text-align:right;">{calories_avg} kcal</td>
-        </tr>
-      </table>
-      <p>Keep it up! Every day counts.</p>
-      <p style="color:#888;font-size:12px;">— The {tenant_name} Team</p>
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;padding:24px;background:#ffffff;color:#333333;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;">
+        {logo_markup}
+        <div style="font-size:12px;color:#666666;text-align:right;">
+          <div><strong>Weekly Engagement Summary</strong></div>
+          <div>{week_start} to {week_end}</div>
+        </div>
+      </div>
+      <h2 style="margin:0 0 8px;color:{primary_color};">Hi {user_name}, here is your weekly progress</h2>
+      <p style="margin:0 0 16px;color:#555555;">
+        Your coach at <strong>{tenant_name}</strong> shared your latest weekly summary.
+      </p>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:10px 14px;background:{secondary_color};font-weight:700;">Workouts</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Sessions this week</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(workouts.get("weekly_sessions"))}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Active days this week</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(workouts.get("weekly_active_days"))}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Current streak</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(workouts.get("current_streak_days"), " days")}</td></tr>
+        </table>
+      </div>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:10px 14px;background:{secondary_color};font-weight:700;">Nutrition</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Meal logs this week</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(nutrition.get("meal_logs"))}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Avg calories</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(nutrition.get("avg_calories"), " kcal")}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Avg protein</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(nutrition.get("avg_protein_g"), " g")}</td></tr>
+        </table>
+      </div>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:10px 14px;background:{secondary_color};font-weight:700;">Body Metrics</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Latest weight</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(body_metrics.get("latest_weight_lbs"), " lbs")}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Weekly weight change</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(body_metrics.get("weight_change_weekly_lbs"), " lbs")}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Latest body fat</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(body_metrics.get("latest_body_fat_pct"), "%")}</td></tr>
+        </table>
+      </div>
+
+      <div style="border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;margin-bottom:16px;">
+        <div style="padding:10px 14px;background:{secondary_color};font-weight:700;">Goals</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Total goals</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(goals.get("total_goals"))}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Open goals</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(goals.get("open_goals"))}</td></tr>
+          <tr><td style="padding:10px 14px;border-top:1px solid #f0f0f0;">Completed goals</td><td style="padding:10px 14px;border-top:1px solid #f0f0f0;text-align:right;">{_fmt(goals.get("completed_goals"))}</td></tr>
+        </table>
+      </div>
+
+      <p style="margin:0;color:#666666;font-size:12px;">Keep going. Consistency each week drives long-term results.</p>
+      <p style="margin:6px 0 0;color:#666666;font-size:12px;">— {tenant_name}</p>
     </div>
     """
     return send_email(
         to=to,
-        subject=f"Your {tenant_name} Weekly Summary",
+        subject=f"Your {tenant_name} Weekly Summary ({week_start} - {week_end})",
         html_body=html,
     )
 

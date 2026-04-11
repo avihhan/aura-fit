@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -78,6 +78,176 @@ def _resolve_signed_upload(bucket_api, path: str):
         "Signed upload URLs are not supported by current Supabase SDK. "
         "Upgrade backend dependency to enable logo uploads."
     )
+
+
+def _resolve_week_window(body: dict) -> tuple[date, date]:
+    """Resolve a reporting window (inclusive), defaulting to last 7 days."""
+    today = date.today()
+    default_start = today - timedelta(days=6)
+
+    start_raw = (body.get("start_date") or "").strip()
+    end_raw = (body.get("end_date") or "").strip()
+
+    try:
+        start_date = date.fromisoformat(start_raw) if start_raw else default_start
+        end_date = date.fromisoformat(end_raw) if end_raw else today
+    except ValueError:
+        start_date = default_start
+        end_date = today
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    return start_date, end_date
+
+
+def _status_value(raw: str | None) -> str:
+    return (raw or "").strip().lower()
+
+
+def _to_num(raw) -> float | None:
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _avg(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 1) if values else None
+
+
+def _delta(first_val: float | None, last_val: float | None) -> float | None:
+    if first_val is None or last_val is None:
+        return None
+    return round(last_val - first_val, 1)
+
+
+def _build_member_weekly_summary(sb, tenant_id: int, member_id: int, start_date: date, end_date: date):
+    start_iso = start_date.isoformat()
+    end_iso = end_date.isoformat()
+    start_dt_iso = datetime.combine(start_date, time.min).isoformat()
+    end_dt_iso = datetime.combine(end_date, time.max).isoformat()
+
+    weekly_workouts = (
+        sb.table("workout_logs")
+        .select("id, workout_date")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .gte("workout_date", start_iso)
+        .lte("workout_date", end_iso)
+        .execute()
+    )
+    all_workouts = (
+        sb.table("workout_logs")
+        .select("workout_date")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .execute()
+    )
+    workout_rows = weekly_workouts.data or []
+    all_workout_dates = [w.get("workout_date") for w in (all_workouts.data or []) if w.get("workout_date")]
+    from app.services.streak_service import calculate_streak
+    streak_stats = calculate_streak(all_workout_dates)
+
+    nutrition_rows_result = (
+        sb.table("nutrition_logs")
+        .select("calories, protein, logged_at")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .gte("logged_at", start_dt_iso)
+        .lte("logged_at", end_dt_iso)
+        .execute()
+    )
+    nutrition_rows = nutrition_rows_result.data or []
+    cal_values = [_to_num(n.get("calories")) for n in nutrition_rows]
+    protein_values = [_to_num(n.get("protein")) for n in nutrition_rows]
+    cal_values = [v for v in cal_values if v is not None]
+    protein_values = [v for v in protein_values if v is not None]
+
+    body_weekly_result = (
+        sb.table("body_metrics")
+        .select("weight, body_fat_percentage, recorded_at")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .gte("recorded_at", start_dt_iso)
+        .lte("recorded_at", end_dt_iso)
+        .order("recorded_at", desc=False)
+        .execute()
+    )
+    body_latest_result = (
+        sb.table("body_metrics")
+        .select("weight, body_fat_percentage, recorded_at")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .order("recorded_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    body_weekly_rows = body_weekly_result.data or []
+    body_latest = (body_latest_result.data or [None])[0]
+
+    first_week = body_weekly_rows[0] if body_weekly_rows else None
+    last_week = body_weekly_rows[-1] if body_weekly_rows else None
+
+    first_weight = _to_num((first_week or {}).get("weight"))
+    last_weight = _to_num((last_week or {}).get("weight"))
+    first_body_fat = _to_num((first_week or {}).get("body_fat_percentage"))
+    last_body_fat = _to_num((last_week or {}).get("body_fat_percentage"))
+
+    goals_result = (
+        sb.table("goals")
+        .select("status, goal_type, start_date")
+        .eq("tenant_id", tenant_id)
+        .eq("user_id", member_id)
+        .execute()
+    )
+    goals_rows = goals_result.data or []
+    completed_statuses = {"completed", "done", "achieved"}
+    completed_count = sum(1 for g in goals_rows if _status_value(g.get("status")) in completed_statuses)
+    open_count = max(len(goals_rows) - completed_count, 0)
+    started_this_week = 0
+    for g in goals_rows:
+        start_raw = g.get("start_date")
+        if not start_raw:
+            continue
+        try:
+            d = date.fromisoformat(str(start_raw).split("T")[0])
+        except ValueError:
+            continue
+        if start_date <= d <= end_date:
+            started_this_week += 1
+
+    return {
+        "window": {
+            "start_date": start_iso,
+            "end_date": end_iso,
+        },
+        "workouts": {
+            "weekly_sessions": len(workout_rows),
+            "weekly_active_days": len({w.get("workout_date") for w in workout_rows if w.get("workout_date")}),
+            "current_streak_days": streak_stats["current_streak"],
+            "lifetime_workout_days": streak_stats["total_workouts"],
+        },
+        "nutrition": {
+            "meal_logs": len(nutrition_rows),
+            "avg_calories": _avg(cal_values),
+            "avg_protein_g": _avg(protein_values),
+        },
+        "body_metrics": {
+            "latest_weight_lbs": _to_num((body_latest or {}).get("weight")),
+            "latest_body_fat_pct": _to_num((body_latest or {}).get("body_fat_percentage")),
+            "weight_change_weekly_lbs": _delta(first_weight, last_weight),
+            "body_fat_change_weekly_pct": _delta(first_body_fat, last_body_fat),
+        },
+        "goals": {
+            "total_goals": len(goals_rows),
+            "open_goals": open_count,
+            "completed_goals": completed_count,
+            "started_this_week": started_this_week,
+        },
+    }
 
 
 @bp.route("/analytics", methods=["GET"])
@@ -617,9 +787,11 @@ def member_report(member_id):
 @require_auth
 @require_role("owner")
 def send_weekly_summaries():
-    """Send weekly summary emails to all members of the tenant."""
+    """Send tenant-scoped weekly summary emails to all members."""
     from app.services.email_service import send_weekly_summary
-    from app.services.streak_service import calculate_streak
+
+    body = request.get_json(silent=True) or {}
+    start_date, end_date = _resolve_week_window(body)
 
     sb = get_supabase_admin()
     members = (
@@ -632,47 +804,77 @@ def send_weekly_summaries():
 
     tenant = (
         sb.table("tenants")
-        .select("name")
+        .select("name, logo_url, primary_color, secondary_color")
         .eq("id", g.tenant_id)
         .maybe_single()
         .execute()
     )
-    tenant_name = tenant.data["name"] if tenant.data else "AuraFit"
+    tenant_data = tenant.data or {}
+    tenant_name = tenant_data.get("name") or "AuraFit"
 
     sent_count = 0
-    for m in (members.data or []):
-        workouts = (
-            sb.table("workout_logs")
-            .select("workout_date")
-            .eq("user_id", m["id"])
-            .eq("tenant_id", g.tenant_id)
-            .execute()
-        )
-        dates = [w["workout_date"] for w in (workouts.data or [])]
-        stats = calculate_streak(dates)
+    skipped_count = 0
+    failed_count = 0
+    errors: list[dict] = []
+    members_list = members.data or []
 
-        nutrition = (
-            sb.table("nutrition_logs")
-            .select("calories")
-            .eq("user_id", m["id"])
-            .eq("tenant_id", g.tenant_id)
-            .execute()
-        )
-        cals = [n["calories"] for n in (nutrition.data or []) if n.get("calories")]
-        avg_cal = int(sum(cals) / len(cals)) if cals else 0
+    for m in members_list:
+        member_email = (m.get("email") or "").strip()
+        if not member_email:
+            skipped_count += 1
+            continue
+        member_id = m.get("id")
+        if member_id is None:
+            skipped_count += 1
+            continue
+        try:
+            summary = _build_member_weekly_summary(
+                sb=sb,
+                tenant_id=g.tenant_id,
+                member_id=member_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            result = send_weekly_summary(
+                to=member_email,
+                user_name=member_email.split("@")[0],
+                tenant_name=tenant_name,
+                week_start=start_date.isoformat(),
+                week_end=end_date.isoformat(),
+                summary=summary,
+                branding={
+                    "logo_url": tenant_data.get("logo_url"),
+                    "primary_color": tenant_data.get("primary_color"),
+                    "secondary_color": tenant_data.get("secondary_color"),
+                },
+            )
+            if result.get("sent"):
+                sent_count += 1
+            else:
+                failed_count += 1
+                errors.append(
+                    {
+                        "email": member_email,
+                        "error": result.get("detail") or "send failed",
+                    }
+                )
+        except Exception as exc:
+            failed_count += 1
+            errors.append({"email": member_email, "error": str(exc)})
 
-        result = send_weekly_summary(
-            to=m["email"],
-            user_name=m["email"].split("@")[0],
-            workouts_count=stats["total_workouts"],
-            streak=stats["current_streak"],
-            calories_avg=avg_cal,
-            tenant_name=tenant_name,
-        )
-        if result.get("sent"):
-            sent_count += 1
-
-    return jsonify({"sent": sent_count, "total_members": len(members.data or [])})
+    return jsonify(
+        {
+            "window": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+            },
+            "sent": sent_count,
+            "failed": failed_count,
+            "skipped": skipped_count,
+            "total_members": len(members_list),
+            "errors": errors[:10],
+        }
+    )
 
 
 @bp.route("/members/<int:member_id>", methods=["GET"])

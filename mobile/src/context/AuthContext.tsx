@@ -94,6 +94,17 @@ function tint(hex: string, ratio: number): string {
   return `#${mix(r).toString(16).padStart(2, '0')}${mix(g).toString(16).padStart(2, '0')}${mix(b).toString(16).padStart(2, '0')}`;
 }
 
+function relativeLuminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const lin = (v: number) =>
+    v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrastText(hex: string): string {
+  return relativeLuminance(hex) > 0.45 ? '#333333' : '#f5f5f5';
+}
+
 function applyBrandingCssVars(tenant: Tenant | null) {
   const primary = isHexColor(tenant?.primary_color) ? tenant.primary_color : DEFAULT_PRIMARY;
   const secondary = isHexColor(tenant?.secondary_color)
@@ -105,6 +116,10 @@ function applyBrandingCssVars(tenant: Tenant | null) {
   const widgetBg = isHexColor(tenant?.widget_background_color)
     ? tenant.widget_background_color
     : null;
+  const effectiveWidgetBg = widgetBg ?? DEFAULT_WIDGET_BACKGROUND;
+  const onBackground = contrastText(background);
+  const onWidget = contrastText(effectiveWidgetBg);
+  const onSidebar = contrastText(effectiveWidgetBg);
   const [r, g, b] = hexToRgb(primary);
   const root = document.documentElement;
   root.style.setProperty('--tenant-primary', primary);
@@ -113,12 +128,21 @@ function applyBrandingCssVars(tenant: Tenant | null) {
   root.style.setProperty('--tenant-background', background);
   root.style.setProperty(
     '--tenant-widget-background',
-    widgetBg ? widgetBg : DEFAULT_WIDGET_BACKGROUND,
+    effectiveWidgetBg,
   );
   root.style.setProperty('--bg', background);
   root.style.setProperty(
     '--bg-card',
-    widgetBg ? widgetBg : DEFAULT_WIDGET_BACKGROUND,
+    effectiveWidgetBg,
+  );
+  root.style.setProperty('--text', onBackground);
+  root.style.setProperty('--text-dim', onBackground === '#333333' ? '#555555' : '#d4d4d4');
+  root.style.setProperty('--text-muted', onBackground === '#333333' ? '#444444' : '#b8b8b8');
+  root.style.setProperty('--panel-text', onWidget);
+  root.style.setProperty('--sidebar-text', onSidebar);
+  root.style.setProperty(
+    '--sidebar-text-dim',
+    onSidebar === '#333333' ? '#555555' : '#d4d4d4',
   );
   root.style.setProperty('--accent', primary);
   root.style.setProperty('--accent-light', tint(primary, 0.35));
