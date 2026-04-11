@@ -34,9 +34,7 @@ def get_user():
     )
     tenant_row = _safe_execute(
         sb.table("tenants")
-        .select(
-            "id, name, logo_url, primary_color, secondary_color, background_color, widget_background_color"
-        )
+        .select("*")
         .eq("id", g.tenant_id)
         .maybe_single()
     )

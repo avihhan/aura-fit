@@ -37,6 +37,13 @@ def _can_use_branding_fallback(exc: Exception) -> bool:
     return _is_postgrest_missing_response(exc)
 
 
+def _is_missing_branding_columns(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "pgrst204" in text and (
+        "background_color" in text or "widget_background_color" in text
+    )
+
+
 def _sanitize_filename(filename: str) -> str:
     safe = Path(filename or "").name.strip().replace(" ", "_")
     if not safe:
@@ -188,7 +195,7 @@ def get_branding():
     except Exception as exc:
         # Fallbacks:
         # - occasional postgrest-py "Missing response" bug (code 204)
-        if _can_use_branding_fallback(exc):
+        if _can_use_branding_fallback(exc) or _is_missing_branding_columns(exc):
             try:
                 result = (
                     sb.table("tenants")
@@ -249,12 +256,26 @@ def update_branding():
         return jsonify({"error": "No updatable fields provided"}), 400
 
     sb = get_supabase_admin()
-    result = (
-        sb.table("tenants")
-        .update(allowed)
-        .eq("id", g.tenant_id)
-        .execute()
-    )
+    try:
+        result = (
+            sb.table("tenants")
+            .update(allowed)
+            .eq("id", g.tenant_id)
+            .execute()
+        )
+    except Exception as exc:
+        if not _is_missing_branding_columns(exc):
+            raise
+        allowed.pop("background_color", None)
+        allowed.pop("widget_background_color", None)
+        if not allowed:
+            return jsonify({"error": "No compatible updatable fields provided"}), 400
+        result = (
+            sb.table("tenants")
+            .update(allowed)
+            .eq("id", g.tenant_id)
+            .execute()
+        )
     if not result.data:
         return jsonify({"error": "Update failed"}), 500
     tenant = result.data[0]
