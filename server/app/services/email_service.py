@@ -8,6 +8,9 @@ When keys are missing, emails are logged to stdout for local dev.
 from __future__ import annotations
 
 import os
+import smtplib
+import ssl
+from email.message import EmailMessage
 from typing import Any
 
 
@@ -28,30 +31,90 @@ def _sendgrid_client():
     }
 
 
+def _smtp_config() -> dict[str, Any] | None:
+    """Return SMTP config when credentials are available."""
+    host = (os.getenv("SMTP_HOST", "") or "smtp.gmail.com").strip()
+    port_raw = (os.getenv("SMTP_PORT", "") or "587").strip()
+    username = (
+        os.getenv("SMTP_USERNAME", "").strip()
+        or os.getenv("SMTP_USER", "").strip()
+        or os.getenv("SENDGRID_FROM_EMAIL", "").strip()
+        or "burnerwill111@gmail.com"
+    )
+    password = (
+        os.getenv("SMTP_PASSWORD", "").strip()
+        or os.getenv("SMTP_PASS", "").strip()
+        or os.getenv("GMAIL_APP_PASSWORD", "").strip()
+    )
+    if not host or not username or not password:
+        return None
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = 587
+    from_email = (
+        os.getenv("SMTP_FROM_EMAIL", "").strip()
+        or os.getenv("SENDGRID_FROM_EMAIL", "").strip()
+        or username
+    )
+    return {
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "from_email": from_email,
+    }
+
+
+def _send_smtp(*, to: str, subject: str, html_body: str, config: dict[str, Any]) -> dict[str, Any]:
+    msg = EmailMessage()
+    msg["From"] = config["from_email"]
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content("This email requires HTML support.")
+    msg.add_alternative(html_body, subtype="html")
+
+    try:
+        with smtplib.SMTP(config["host"], config["port"], timeout=20) as server:
+            server.starttls(context=ssl.create_default_context())
+            server.login(config["username"], config["password"])
+            server.send_message(msg)
+        return {"sent": True, "provider": "smtp"}
+    except Exception as exc:
+        return {"sent": False, "provider": "smtp", "detail": str(exc)}
+
+
 def send_email(*, to: str, subject: str, html_body: str) -> dict[str, Any]:
     """
     Send a single email. Returns {"sent": True/False, "detail": ...}.
     Falls back to console logging when SendGrid is not configured.
     """
     client, helpers = _sendgrid_client()
-    from_email = os.getenv("SENDGRID_FROM_EMAIL", "noreply@aurafit.app")
+    from_email = os.getenv("SENDGRID_FROM_EMAIL", "burnerwill111@gmail.com")
 
-    if client is None:
-        print(f"[EMAIL-DEV] To={to}  Subject={subject}")
-        print(f"[EMAIL-DEV] Body preview: {html_body[:200]}")
-        return {"sent": False, "detail": "SendGrid not configured — logged to console"}
+    if client is not None:
+        mail = helpers["Mail"](
+            from_email=helpers["Email"](from_email),
+            to_emails=helpers["To"](to),
+            subject=subject,
+            html_content=helpers["Content"]("text/html", html_body),
+        )
+        try:
+            response = client.send(mail)
+            return {"sent": True, "status_code": response.status_code, "provider": "sendgrid"}
+        except Exception as exc:
+            return {"sent": False, "detail": str(exc), "provider": "sendgrid"}
 
-    mail = helpers["Mail"](
-        from_email=helpers["Email"](from_email),
-        to_emails=helpers["To"](to),
-        subject=subject,
-        html_content=helpers["Content"]("text/html", html_body),
-    )
-    try:
-        response = client.send(mail)
-        return {"sent": True, "status_code": response.status_code}
-    except Exception as exc:
-        return {"sent": False, "detail": str(exc)}
+    smtp = _smtp_config()
+    if smtp is not None:
+        return _send_smtp(to=to, subject=subject, html_body=html_body, config=smtp)
+
+    print(f"[EMAIL-DEV] To={to}  Subject={subject}")
+    print(f"[EMAIL-DEV] Body preview: {html_body[:200]}")
+    return {
+        "sent": False,
+        "detail": "No email provider configured (SendGrid/SMTP) — logged to console",
+    }
 
 
 # ---------------------------------------------------------------------------
