@@ -22,6 +22,8 @@ export interface Tenant {
   logo_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
+  background_color: string | null;
+  widget_background_color: string | null;
 }
 
 export interface LoginResponse {

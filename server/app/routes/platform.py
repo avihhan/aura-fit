@@ -128,6 +128,8 @@ def update_tenant(tenant_id):
         "logo_url",
         "primary_color",
         "secondary_color",
+        "background_color",
+        "widget_background_color",
         "custom_domain",
         "ai_enabled",
     ):

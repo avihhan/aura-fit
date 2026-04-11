@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
-  const { login, signup, user, loading, initialized } = useAuth();
+  const { login, signup, user, tenant, brandingTenant, loading, initialized } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
@@ -26,6 +26,9 @@ export default function Login() {
   }
 
   const isLogin = mode === 'login';
+  const displayTenant = tenant ?? brandingTenant;
+  const brandName = displayTenant?.name || 'AuraFit';
+  const brandInitial = (brandName[0] || 'A').toUpperCase();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -61,8 +64,14 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">A</div>
-          <h1>AuraFit</h1>
+          <div className="login-logo">
+            {displayTenant?.logo_url ? (
+              <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+            ) : (
+              brandInitial
+            )}
+          </div>
+          <h1>{brandName}</h1>
           <p>{isLogin ? 'Welcome back' : 'Create your account'}</p>
         </div>
 

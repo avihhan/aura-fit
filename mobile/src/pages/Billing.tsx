@@ -15,7 +15,7 @@ function formatMoney(cents: number | null, currency: string) {
 }
 
 export default function Billing() {
-  const { accessToken, user } = useAuth();
+  const { accessToken, user, tenant, brandingTenant } = useAuth();
   const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,6 +46,9 @@ export default function Billing() {
     [billing],
   );
   const isAlreadyActive = billing?.status === 'active' || billing?.status === 'paid';
+  const displayTenant = tenant ?? brandingTenant;
+  const brandName = displayTenant?.name || 'AuraFit';
+  const brandInitial = (brandName[0] || 'A').toUpperCase();
 
   async function handleCheckout() {
     if (!accessToken || !billing || isAlreadyActive) return;
@@ -69,7 +72,13 @@ export default function Billing() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">A</div>
+          <div className="login-logo">
+            {displayTenant?.logo_url ? (
+              <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+            ) : (
+              brandInitial
+            )}
+          </div>
           <h1>Complete Your Subscription</h1>
           <p>Continue access to your tenant services.</p>
         </div>

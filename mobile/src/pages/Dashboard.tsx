@@ -30,7 +30,7 @@ interface StreakData {
 }
 
 export default function Dashboard() {
-  const { user, tenant, accessToken } = useAuth();
+  const { user, tenant, brandingTenant, accessToken } = useAuth();
   const [recentMeals, setRecentMeals] = useState<NutritionLog[]>([]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [streak, setStreak] = useState<StreakData | null>(null);
@@ -122,12 +122,25 @@ export default function Dashboard() {
     return diffDays >= 0 && diffDays < 7;
   });
   const hasTodayWorkout = workouts.some((w) => w.workout_date === today);
+  const displayTenant = tenant ?? brandingTenant;
+  const brandName = displayTenant?.name || 'Aura Fit';
+  const brandInitial = (brandName[0] || 'A').toUpperCase();
 
   return (
     <div className="page">
       <header className="page-header">
         <div className="page-header-row">
           <div>
+            <div className="dashboard-tenant-brand">
+              <div className="dashboard-tenant-brand__logo">
+                {displayTenant?.logo_url ? (
+                  <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+                ) : (
+                  brandInitial
+                )}
+              </div>
+              <span>{brandName}</span>
+            </div>
             <h1>
               Hey{user?.email ? `, ${user.email.split('@')[0]}` : ''}
             </h1>

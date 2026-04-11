@@ -191,7 +191,7 @@ def signup():
     )
     tenant_row = (
         sb.table("tenants")
-        .select("id, name, logo_url, primary_color, secondary_color")
+        .select("*")
         .eq("id", tenant_id)
         .maybe_single()
         .execute()
@@ -249,7 +249,7 @@ def login():
 
     tenant_row = (
         sb.table("tenants")
-        .select("id, name, logo_url, primary_color, secondary_color")
+        .select("*")
         .eq("id", user_row.data["tenant_id"])
         .maybe_single()
         .execute()

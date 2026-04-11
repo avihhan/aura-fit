@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { apiFetch } from '../lib/api';
+import { apiFetch, apiOwnerCreateBrandingLogoUploadSignUrl } from '../lib/api';
 
 interface Branding {
   id: number;
@@ -8,7 +8,8 @@ interface Branding {
   logo_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
-  custom_domain: string | null;
+  background_color: string | null;
+  widget_background_color: string | null;
   registration_code: string | null;
 }
 
@@ -46,14 +47,18 @@ export default function Settings() {
   const [branding, setBranding] = useState<Branding | null>(null);
   const [name, setName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [primaryColor, setPrimaryColor] = useState('#6c63ff');
   const [secondaryColor, setSecondaryColor] = useState('#1a1a2e');
-  const [customDomain, setCustomDomain] = useState('');
+  const [backgroundColor, setBackgroundColor] = useState('#0b0b14');
+  const [widgetBackgroundColor, setWidgetBackgroundColor] = useState('#1a1a2e');
   const [registrationCode, setRegistrationCode] = useState('');
   const [resettingCode, setResettingCode] = useState(false);
   const [codeStatus, setCodeStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [brandingStatus, setBrandingStatus] = useState('');
   const [billing, setBilling] = useState<BillingSettings>({
     enabled: false,
     provider: 'lemon_squeezy',
@@ -90,7 +95,8 @@ export default function Settings() {
           setLogoUrl(b.logo_url ?? '');
           setPrimaryColor(b.primary_color ?? '#6c63ff');
           setSecondaryColor(b.secondary_color ?? '#1a1a2e');
-          setCustomDomain(b.custom_domain ?? '');
+          setBackgroundColor(b.background_color ?? '#0b0b14');
+          setWidgetBackgroundColor(b.widget_background_color ?? '#1a1a2e');
           setRegistrationCode(b.registration_code ?? '');
         }
       })
@@ -125,6 +131,7 @@ export default function Settings() {
     if (!accessToken) return;
     setSaving(true);
     setSaved(false);
+    setBrandingStatus('');
 
     await apiFetch('/api/admin/branding', accessToken, {
       method: 'PUT',
@@ -133,13 +140,66 @@ export default function Settings() {
         logo_url: logoUrl.trim() || null,
         primary_color: primaryColor,
         secondary_color: secondaryColor,
-        custom_domain: customDomain.trim() || null,
+        background_color: backgroundColor,
+        widget_background_color: widgetBackgroundColor,
       }),
     });
 
     setSaving(false);
     setSaved(true);
+    setBrandingStatus('Branding saved');
     setTimeout(() => setSaved(false), 3000);
+    setTimeout(() => setBrandingStatus(''), 3000);
+  }
+
+  async function handleUploadLogo() {
+    if (!accessToken || !logoFile) return;
+    setLogoUploading(true);
+    try {
+      const sign = await apiOwnerCreateBrandingLogoUploadSignUrl(accessToken, logoFile.name);
+      if (!sign.signed_upload_url) {
+        throw new Error('Signed upload URL was not returned');
+      }
+      let uploadUrl = sign.signed_upload_url;
+      if (sign.token && !uploadUrl.includes('token=')) {
+        uploadUrl += `${uploadUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(sign.token)}`;
+      }
+      const putResp = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': logoFile.type || 'application/octet-stream',
+          'x-upsert': 'true',
+        },
+        body: logoFile,
+      });
+      if (!putResp.ok) {
+        const fallbackResp = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': logoFile.type || 'application/octet-stream',
+            'x-upsert': 'true',
+          },
+          body: logoFile,
+        });
+        if (!fallbackResp.ok) {
+          throw new Error('Logo upload failed');
+        }
+      }
+      if (!sign.public_url) {
+        throw new Error('Logo public URL not available from upload response');
+      }
+      setLogoUrl(sign.public_url);
+      setLogoFile(null);
+      setBrandingStatus('Logo uploaded. Click Save Branding to publish it.');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      setTimeout(() => setBrandingStatus(''), 4000);
+    } catch (err) {
+      setBrandingStatus(err instanceof Error ? err.message : 'Failed to upload logo');
+      setTimeout(() => setBrandingStatus(''), 4000);
+    } finally {
+      setLogoUploading(false);
+    }
   }
 
   async function handleSaveBilling(e: FormEvent) {
@@ -304,8 +364,28 @@ export default function Settings() {
             <input id="s-name" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
           </div>
           <div className="form-group">
-            <label htmlFor="s-logo">Logo URL</label>
-            <input id="s-logo" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." disabled={saving} />
+            <label htmlFor="s-logo-file">Logo Upload</label>
+            <input
+              id="s-logo-file"
+              type="file"
+              accept="image/*"
+              disabled={saving || logoUploading}
+              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+            />
+            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
+                type="button"
+                className="login-btn"
+                style={{ padding: '0.45rem 0.9rem', fontSize: '0.75rem' }}
+                onClick={() => void handleUploadLogo()}
+                disabled={!logoFile || saving || logoUploading}
+              >
+                {logoUploading ? 'Uploading…' : 'Upload Logo'}
+              </button>
+              <span className="form-hint">
+                {logoFile ? logoFile.name : logoUrl ? 'Current logo saved' : 'No logo uploaded'}
+              </span>
+            </div>
           </div>
           <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div className="form-group">
@@ -323,11 +403,34 @@ export default function Settings() {
               </div>
             </div>
           </div>
-          <div className="form-group">
-            <label htmlFor="s-domain">Custom Domain</label>
-            <input id="s-domain" value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} placeholder="app.yourfitness.com" disabled={saving} />
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="form-group">
+              <label htmlFor="s-bg">App Background Color</label>
+              <div className="color-input-wrap">
+                <input
+                  id="s-bg"
+                  type="color"
+                  value={backgroundColor}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  disabled={saving}
+                />
+                <span className="color-hex">{backgroundColor}</span>
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="s-wbg">Widget Background Color</label>
+              <div className="color-input-wrap">
+                <input
+                  id="s-wbg"
+                  type="color"
+                  value={widgetBackgroundColor}
+                  onChange={(e) => setWidgetBackgroundColor(e.target.value)}
+                  disabled={saving}
+                />
+                <span className="color-hex">{widgetBackgroundColor}</span>
+              </div>
+            </div>
           </div>
-
           {logoUrl && (
             <div className="logo-preview">
               <img src={logoUrl} alt="Logo preview" onError={(e) => (e.currentTarget.style.display = 'none')} />
@@ -339,6 +442,7 @@ export default function Settings() {
               {saving ? 'Saving\u2026' : 'Save Branding'}
             </button>
             {saved && <span className="save-badge">Saved!</span>}
+            {brandingStatus && <span className="save-badge">{brandingStatus}</span>}
           </div>
         </form>
       </section>

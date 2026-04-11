@@ -9,6 +9,9 @@
   --text: #e2e8f0;
   --text-dim: #94a3b8;
   --text-muted: #64748b;
+  --tenant-primary: #6c63ff;
+  --tenant-secondary: #1a1a2e;
+  --tenant-primary-rgb: 108, 99, 255;
   --accent: #6c63ff;
   --accent-light: #a5b4fc;
   --danger: #ef4444;
@@ -71,7 +74,7 @@ body {
 .loading-logo {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #6c63ff, #3b82f6);
+  background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -79,6 +82,13 @@ body {
   font-size: 1.25rem;
   font-weight: 700;
   color: #fff;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
 }
 
 .role-gate h2 {
@@ -105,7 +115,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 0%, #1a1a3e 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 0%, var(--tenant-secondary) 0%, var(--bg) 70%);
   padding: 1rem;
 }
 
@@ -129,7 +139,7 @@ body {
   width: 48px;
   height: 48px;
   margin: 0 auto 0.5rem;
-  background: linear-gradient(135deg, #6c63ff, #3b82f6);
+  background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -193,7 +203,7 @@ body {
 
 .form-group input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(var(--tenant-primary-rgb), 0.15);
 }
 
 .form-group input:disabled {
@@ -211,7 +221,7 @@ body {
 
 .login-btn {
   padding: 0.75rem;
-  background: linear-gradient(135deg, #6c63ff, #3b82f6);
+  background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
   border: none;
   border-radius: 10px;
   color: #fff;
@@ -317,8 +327,8 @@ body {
 
 .tab--active {
   color: var(--accent-light);
-  background: rgba(108, 99, 255, 0.16);
-  border: 1px solid rgba(108, 99, 255, 0.28);
+  background: rgba(var(--tenant-primary-rgb), 0.16);
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.28);
 }
 
 .sidebar-logout-btn {
@@ -372,6 +382,29 @@ body {
   font-size: 1.375rem;
   font-weight: 700;
   color: #fff;
+}
+
+.dashboard-tenant-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.dashboard-tenant-brand__logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+  overflow: hidden;
 }
 
 .page-subtitle {
@@ -780,8 +813,8 @@ body {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(108, 99, 255, 0.2);
-  border: 1px solid rgba(108, 99, 255, 0.35);
+  background: rgba(var(--tenant-primary-rgb), 0.2);
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.35);
   color: #c4b5fd;
   display: grid;
   place-items: center;
@@ -801,8 +834,8 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #c4b5fd;
-  background: rgba(108, 99, 255, 0.15);
-  border: 1px solid rgba(108, 99, 255, 0.3);
+  background: rgba(var(--tenant-primary-rgb), 0.15);
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.3);
   border-radius: 999px;
   padding: 0.22rem 0.5rem;
 }
@@ -892,8 +925,12 @@ body {
 }
 
 .workout-prompt-card {
-  border: 1px solid rgba(108, 99, 255, 0.28);
-  background: linear-gradient(135deg, rgba(108, 99, 255, 0.12), rgba(59, 130, 246, 0.08));
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.28);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--tenant-primary-rgb), 0.16),
+    rgba(var(--tenant-primary-rgb), 0.08)
+  );
 }
 
 .workout-log-card {
@@ -934,7 +971,7 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   color: #c4b5fd;
-  border: 1px solid rgba(108, 99, 255, 0.25);
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.25);
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
   white-space: nowrap;
@@ -999,7 +1036,7 @@ body {
 }
 
 .nutrition-ring-progress {
-  stroke: #6c63ff;
+  stroke: var(--tenant-primary);
   transition: stroke-dashoffset 0.35s ease;
   stroke-linecap: round;
 }
@@ -1104,8 +1141,8 @@ body {
 }
 
 .badge-chip {
-  background: rgba(108, 99, 255, 0.1);
-  border: 1px solid rgba(108, 99, 255, 0.2);
+  background: rgba(var(--tenant-primary-rgb), 0.12);
+  border: 1px solid rgba(var(--tenant-primary-rgb), 0.24);
   border-radius: 20px;
   padding: 0.3rem 0.625rem;
   font-size: 0.6875rem;
@@ -1277,7 +1314,7 @@ body {
 }
 
 .cal-cell--selected {
-  background: rgba(108, 99, 255, 0.15);
+  background: rgba(var(--tenant-primary-rgb), 0.15);
   border-color: var(--accent);
 }
 
@@ -1337,8 +1374,8 @@ body {
 }
 
 .notif-card--unread {
-  background: rgba(108, 99, 255, 0.06);
-  border-color: rgba(108, 99, 255, 0.2);
+  background: rgba(var(--tenant-primary-rgb), 0.08);
+  border-color: rgba(var(--tenant-primary-rgb), 0.22);
   cursor: pointer;
 }
 
@@ -1395,7 +1432,7 @@ body {
 
 .ai-totals-mobile {
   padding: 0.625rem;
-  background: rgba(108, 99, 255, 0.08);
+  background: rgba(var(--tenant-primary-rgb), 0.1);
   border-radius: 8px;
   font-size: 0.8125rem;
   color: #c4b5fd;
@@ -1449,7 +1486,8 @@ body {
     font-size: 0.875rem;
     font-weight: 700;
     color: #fff;
-    background: linear-gradient(135deg, #6c63ff, #3b82f6);
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    overflow: hidden;
   }
 
   .mobile-brand__text {
@@ -1518,8 +1556,8 @@ body {
   }
 
   .tab--active {
-    background: rgba(108, 99, 255, 0.16);
-    border: 1px solid rgba(108, 99, 255, 0.28);
+    background: rgba(var(--tenant-primary-rgb), 0.16);
+    border: 1px solid rgba(var(--tenant-primary-rgb), 0.28);
   }
 
   .sidebar-logout-btn {

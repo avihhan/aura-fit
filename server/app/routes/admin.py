@@ -1,3 +1,8 @@
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
 from flask import Blueprint, current_app, g, jsonify, request
 from app.auth import get_supabase_admin, require_auth, require_role
 from app.registration_code import (
@@ -8,6 +13,7 @@ from app.services.billing_service import get_tenant_billing_config
 from app.services.lemon_squeezy_service import list_test_mode_assets
 
 bp = Blueprint("admin", __name__)
+DEFAULT_LOGO_BUCKET = "tenant-branding"
 
 
 def _is_postgrest_missing_response(exc: Exception) -> bool:
@@ -29,6 +35,42 @@ def _is_postgrest_missing_response(exc: Exception) -> bool:
 
 def _can_use_branding_fallback(exc: Exception) -> bool:
     return _is_postgrest_missing_response(exc)
+
+
+def _sanitize_filename(filename: str) -> str:
+    safe = Path(filename or "").name.strip().replace(" ", "_")
+    if not safe:
+        safe = f"logo_{uuid4().hex[:8]}"
+    return safe[:120]
+
+
+def _build_logo_storage_path(tenant_id: int, filename: str) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    suffix = uuid4().hex[:10]
+    return f"tenant_{tenant_id}/branding/logo/{ts}_{suffix}_{_sanitize_filename(filename)}"
+
+
+def _resolve_public_url(bucket_api, path: str) -> str | None:
+    try:
+        response = bucket_api.get_public_url(path)
+    except Exception:
+        return None
+
+    if isinstance(response, str):
+        return response
+    if isinstance(response, dict):
+        return response.get("publicUrl") or response.get("public_url")
+    return None
+
+
+def _resolve_signed_upload(bucket_api, path: str):
+    signer = getattr(bucket_api, "create_signed_upload_url", None)
+    if callable(signer):
+        return signer(path)
+    raise RuntimeError(
+        "Signed upload URLs are not supported by current Supabase SDK. "
+        "Upgrade backend dependency to enable logo uploads."
+    )
 
 
 @bp.route("/analytics", methods=["GET"])
@@ -137,7 +179,7 @@ def get_branding():
         result = (
             sb.table("tenants")
             .select(
-                "id, name, logo_url, primary_color, secondary_color, custom_domain, registration_code"
+                "id, name, logo_url, primary_color, secondary_color, background_color, widget_background_color, custom_domain, registration_code"
             )
             .eq("id", g.tenant_id)
             .maybe_single()
@@ -150,7 +192,9 @@ def get_branding():
             try:
                 result = (
                     sb.table("tenants")
-                    .select("id, name, logo_url, primary_color, secondary_color, custom_domain")
+                    .select(
+                        "id, name, logo_url, primary_color, secondary_color, background_color, widget_background_color, custom_domain"
+                    )
                     .eq("id", g.tenant_id)
                     .maybe_single()
                     .execute()
@@ -169,6 +213,8 @@ def get_branding():
                         "logo_url": None,
                         "primary_color": None,
                         "secondary_color": None,
+                        "background_color": None,
+                        "widget_background_color": None,
                         "custom_domain": None,
                         "registration_code": None,
                     }
@@ -188,7 +234,15 @@ def get_branding():
 def update_branding():
     body = request.get_json(silent=True) or {}
     allowed = {}
-    for field in ("name", "logo_url", "primary_color", "secondary_color", "custom_domain"):
+    for field in (
+        "name",
+        "logo_url",
+        "primary_color",
+        "secondary_color",
+        "background_color",
+        "widget_background_color",
+        "custom_domain",
+    ):
         if field in body:
             allowed[field] = body[field]
     if not allowed:
@@ -226,6 +280,55 @@ def update_branding():
         sb, g.tenant_id, current_code
     )
     return jsonify({"branding": tenant})
+
+
+@bp.route("/branding/logo-upload-sign-url", methods=["POST"])
+@require_auth
+@require_role("owner")
+def create_branding_logo_upload_signature():
+    body = request.get_json(silent=True) or {}
+    filename = (body.get("filename") or "").strip()
+    if not filename:
+        return jsonify({"error": "filename is required"}), 400
+
+    bucket_name = os.environ.get("SUPABASE_LOGO_BUCKET", "").strip() or DEFAULT_LOGO_BUCKET
+    object_path = _build_logo_storage_path(g.tenant_id, filename)
+    sb = get_supabase_admin()
+    try:
+        bucket_api = sb.storage.from_(bucket_name)
+        signed_payload = _resolve_signed_upload(bucket_api, object_path)
+        public_url = _resolve_public_url(bucket_api, object_path)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+    except Exception as exc:
+        current_app.logger.exception("Unable to create branding logo upload URL")
+        return jsonify({"error": f"Unable to create upload URL: {exc}"}), 502
+
+    signed_url = None
+    token = None
+    if isinstance(signed_payload, dict):
+        signed_url = (
+            signed_payload.get("signed_url")
+            or signed_payload.get("signedUrl")
+            or signed_payload.get("url")
+        )
+        token = signed_payload.get("token")
+    elif isinstance(signed_payload, str):
+        signed_url = signed_payload
+
+    if signed_url and signed_url.startswith("/"):
+        base = current_app.config.get("SUPABASE_URL", "").rstrip("/")
+        signed_url = f"{base}/storage/v1{signed_url}"
+
+    return jsonify(
+        {
+            "bucket": bucket_name,
+            "object_path": object_path,
+            "signed_upload_url": signed_url,
+            "token": token,
+            "public_url": public_url,
+        }
+    )
 
 
 @bp.route("/registration-code/reset", methods=["POST"])

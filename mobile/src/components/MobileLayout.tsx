@@ -16,7 +16,10 @@ const routePreloaders: Record<string, () => Promise<unknown>> = {
 };
 
 export default function MobileLayout() {
-  const { logout } = useAuth();
+  const { logout, tenant, brandingTenant } = useAuth();
+  const displayTenant = tenant ?? brandingTenant;
+  const brandName = displayTenant?.name || 'Aura Fit';
+  const brandInitial = (brandName[0] || 'A').toUpperCase();
 
   const navItems = [
     {
@@ -159,9 +162,15 @@ export default function MobileLayout() {
   return (
     <div className="mobile-shell">
       <aside className="mobile-brand">
-        <div className="mobile-brand__logo">AF</div>
+        <div className="mobile-brand__logo">
+          {displayTenant?.logo_url ? (
+            <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+          ) : (
+            brandInitial
+          )}
+        </div>
         <div className="mobile-brand__text">
-          <strong>Aura Fit</strong>
+          <strong>{brandName}</strong>
           <span>Client Portal</span>
         </div>
       </aside>

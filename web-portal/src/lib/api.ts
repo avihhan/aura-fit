@@ -22,6 +22,8 @@ export interface Tenant {
   logo_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
+  background_color: string | null;
+  widget_background_color: string | null;
 }
 
 export interface LoginResponse {
@@ -242,6 +244,21 @@ export async function apiOwnerCreateUploadSignUrl(
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(body.error || 'Unable to create upload URL');
+  }
+  return body as UploadSignResponse;
+}
+
+export async function apiOwnerCreateBrandingLogoUploadSignUrl(
+  accessToken: string,
+  filename: string,
+): Promise<UploadSignResponse> {
+  const res = await apiFetch('/api/admin/branding/logo-upload-sign-url', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ filename }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || 'Unable to create logo upload URL');
   }
   return body as UploadSignResponse;
 }

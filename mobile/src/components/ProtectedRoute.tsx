@@ -10,10 +10,13 @@ export default function ProtectedRoute({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, initialized, accessToken, billingGate } = useAuth();
+  const { user, tenant, brandingTenant, initialized, accessToken, billingGate } = useAuth();
   const location = useLocation();
   const [checkingBilling, setCheckingBilling] = useState(false);
   const [requiresPayment, setRequiresPayment] = useState(false);
+  const displayTenant = tenant ?? brandingTenant;
+  const brandName = displayTenant?.name || 'AuraFit';
+  const brandInitial = (brandName[0] || 'A').toUpperCase();
 
   useEffect(() => {
     if (!initialized || !user || !accessToken) return;
@@ -43,7 +46,13 @@ export default function ProtectedRoute({
   if (!initialized) {
     return (
       <div className="loading-screen">
-        <div className="loading-logo">A</div>
+        <div className="loading-logo">
+          {displayTenant?.logo_url ? (
+            <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+          ) : (
+            brandInitial
+          )}
+        </div>
         <p>Loading&hellip;</p>
       </div>
     );
@@ -56,7 +65,13 @@ export default function ProtectedRoute({
   if (checkingBilling) {
     return (
       <div className="loading-screen">
-        <div className="loading-logo">A</div>
+        <div className="loading-logo">
+          {displayTenant?.logo_url ? (
+            <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+          ) : (
+            brandInitial
+          )}
+        </div>
         <p>Checking your subscription&hellip;</p>
       </div>
     );
@@ -65,7 +80,13 @@ export default function ProtectedRoute({
   if (user.role === ROLES.OWNER || user.role === ROLES.SUPER_ADMIN) {
     return (
       <div className="role-gate">
-        <div className="loading-logo">A</div>
+        <div className="loading-logo">
+          {displayTenant?.logo_url ? (
+            <img src={displayTenant.logo_url} alt={`${brandName} logo`} className="brand-logo-img" />
+          ) : (
+            brandInitial
+          )}
+        </div>
         <h2>Admin Account Detected</h2>
         <p>
           This app is for members. Please use the{' '}
