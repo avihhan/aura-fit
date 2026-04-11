@@ -5,30 +5,46 @@ from app.services.billing_service import get_member_billing_snapshot
 bp = Blueprint("users", __name__)
 
 
+def _is_missing_response(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "missing response" in text and (
+        "'code': '204'" in text or '"code": "204"' in text
+    )
+
+
+def _safe_execute(query):
+    try:
+        return query.execute()
+    except Exception as exc:
+        if _is_missing_response(exc):
+            return None
+        raise
+
+
 @bp.route("/users/me", methods=["GET"])
 @require_auth
 def get_user():
     sb = get_supabase_admin()
-    user_row = (
+    user_row = _safe_execute(
         sb.table("users")
         .select("created_at, is_email_verified, email_notifications_enabled")
         .eq("id", g.user_id)
         .eq("tenant_id", g.tenant_id)
         .maybe_single()
-        .execute()
     )
-    tenant_row = (
+    tenant_row = _safe_execute(
         sb.table("tenants")
         .select("id, name, logo_url, primary_color, secondary_color")
         .eq("id", g.tenant_id)
         .maybe_single()
-        .execute()
     )
+    user_data = getattr(user_row, "data", None) if user_row else None
+    tenant_data = getattr(tenant_row, "data", None) if tenant_row else None
     billing_snapshot = get_member_billing_snapshot(
         sb,
         tenant_id=g.tenant_id,
         user_id=g.user_id,
-        user_created_at=(user_row.data or {}).get("created_at"),
+        user_created_at=(user_data or {}).get("created_at"),
     )
     return jsonify(
         {
@@ -38,13 +54,13 @@ def get_user():
                 "email": g.email,
                 "tenant_id": g.tenant_id,
                 "role": g.role,
-                "is_email_verified": (user_row.data or {}).get("is_email_verified", False),
-                "created_at": (user_row.data or {}).get("created_at"),
-                "email_notifications_enabled": (user_row.data or {}).get(
+                "is_email_verified": (user_data or {}).get("is_email_verified", False),
+                "created_at": (user_data or {}).get("created_at"),
+                "email_notifications_enabled": (user_data or {}).get(
                     "email_notifications_enabled", True
                 ),
             },
-            "tenant": tenant_row.data if tenant_row.data else None,
+            "tenant": tenant_data if tenant_data else None,
             "billing_gate": {
                 "requires_payment": billing_snapshot["requires_payment"],
                 "billing_enabled": billing_snapshot["billing_enabled"],

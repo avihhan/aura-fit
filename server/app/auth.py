@@ -18,6 +18,13 @@ ROLE_HIERARCHY = {
 }
 
 
+def _is_missing_response(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "missing response" in text and (
+        "'code': '204'" in text or '"code": "204"' in text
+    )
+
+
 # ---------------------------------------------------------------------------
 # Supabase client helper
 # ---------------------------------------------------------------------------
@@ -71,13 +78,18 @@ def require_auth(f):
             return jsonify({"error": "Token missing sub claim"}), 401
 
         sb = get_supabase_admin()
-        result = (
-            sb.table("users")
-            .select("id, tenant_id, role, email")
-            .eq("auth_id", auth_uid)
-            .maybe_single()
-            .execute()
-        )
+        try:
+            result = (
+                sb.table("users")
+                .select("id, tenant_id, role, email")
+                .eq("auth_id", auth_uid)
+                .maybe_single()
+                .execute()
+            )
+        except Exception as exc:
+            if _is_missing_response(exc):
+                return jsonify({"error": "User lookup unavailable"}), 401
+            raise
 
         if not result.data:
             return jsonify({"error": "User not found"}), 401
