@@ -1,7 +1,16 @@
 from flask import Blueprint, g, jsonify, request
 from app.auth import get_supabase_admin, require_auth
+from app.services.nutrition_targets_service import (
+    calculate_targets,
+    get_latest_body_metric,
+    get_user_nutrition_profile,
+    upsert_user_nutrition_profile,
+)
 
 bp = Blueprint("body_metrics", __name__)
+ALLOWED_SEX = {"male", "female"}
+ALLOWED_ACTIVITY_LEVEL = {"sedentary", "light", "moderate", "very_active", "extra_active"}
+ALLOWED_GOAL = {"lose", "maintain", "gain"}
 
 
 def _normalize_height_fields(payload: dict) -> tuple[int | None, int | None, float | None]:
@@ -51,6 +60,36 @@ def _serialize_metric(row: dict) -> dict:
     }
 
 
+def _validate_questionnaire_payload(payload: dict) -> tuple[dict, str | None]:
+    sex = (payload.get("sex") or "").strip().lower()
+    activity_level = (payload.get("activity_level") or "").strip().lower()
+    goal = (payload.get("goal") or "").strip().lower()
+    age_years = payload.get("age_years")
+
+    if sex not in ALLOWED_SEX:
+        return {}, "sex must be one of: male, female"
+    if activity_level not in ALLOWED_ACTIVITY_LEVEL:
+        return {}, (
+            "activity_level must be one of: sedentary, light, moderate, "
+            "very_active, extra_active"
+        )
+    if goal not in ALLOWED_GOAL:
+        return {}, "goal must be one of: lose, maintain, gain"
+    try:
+        age_num = int(age_years)
+    except (TypeError, ValueError):
+        return {}, "age_years must be an integer"
+    if age_num < 13 or age_num > 120:
+        return {}, "age_years must be between 13 and 120"
+
+    return {
+        "sex": sex,
+        "age_years": age_num,
+        "activity_level": activity_level,
+        "goal": goal,
+    }, None
+
+
 @bp.route("/body-metrics", methods=["POST"])
 @require_auth
 def create_body_metric():
@@ -98,6 +137,54 @@ def list_body_metrics():
         .execute()
     )
     return jsonify({"body_metrics": [_serialize_metric(r) for r in (result.data or [])]})
+
+
+@bp.route("/body-metrics/questionnaire", methods=["GET"])
+@require_auth
+def get_body_metrics_questionnaire():
+    sb = get_supabase_admin()
+    profile = get_user_nutrition_profile(sb, g.tenant_id, g.user_id)
+    latest_metric = get_latest_body_metric(sb, g.tenant_id, g.user_id)
+    recommendations = calculate_targets(profile, latest_metric)
+    return jsonify(
+        {
+            "questionnaire": profile,
+            "recommendations": recommendations,
+        }
+    )
+
+
+@bp.route("/body-metrics/questionnaire", methods=["PUT"])
+@require_auth
+def update_body_metrics_questionnaire():
+    body = request.get_json(silent=True) or {}
+    normalized, error = _validate_questionnaire_payload(body)
+    if error:
+        return jsonify({"error": error}), 400
+
+    sb = get_supabase_admin()
+    try:
+        profile = upsert_user_nutrition_profile(sb, g.tenant_id, g.user_id, normalized)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+    latest_metric = get_latest_body_metric(sb, g.tenant_id, g.user_id)
+    recommendations = calculate_targets(profile, latest_metric)
+    return jsonify(
+        {
+            "questionnaire": profile,
+            "recommendations": recommendations,
+        }
+    )
+
+
+@bp.route("/body-metrics/recommendations", methods=["GET"])
+@require_auth
+def get_body_metrics_recommendations():
+    sb = get_supabase_admin()
+    profile = get_user_nutrition_profile(sb, g.tenant_id, g.user_id)
+    latest_metric = get_latest_body_metric(sb, g.tenant_id, g.user_id)
+    recommendations = calculate_targets(profile, latest_metric)
+    return jsonify({"recommendations": recommendations})
 
 
 @bp.route("/body-metrics/<int:metric_id>", methods=["GET"])

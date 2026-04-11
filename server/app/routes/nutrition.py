@@ -1,5 +1,10 @@
 from flask import Blueprint, g, jsonify, request
 from app.auth import get_supabase_admin, require_auth
+from app.services.nutrition_targets_service import (
+    calculate_targets,
+    get_latest_body_metric,
+    get_user_nutrition_profile,
+)
 
 bp = Blueprint("nutrition", __name__)
 
@@ -11,11 +16,19 @@ def create_nutrition_log():
     logged_at = body.get("logged_at")
     if not logged_at:
         return jsonify({"error": "logged_at is required"}), 400
+    meal_items = (body.get("meal_items") or "").strip()
+    if not meal_items:
+        return jsonify({"error": "meal_items is required"}), 400
+    if body.get("calories") in (None, ""):
+        return jsonify({"error": "calories is required"}), 400
+    if body.get("protein") in (None, ""):
+        return jsonify({"error": "protein is required"}), 400
 
     row = {
         "tenant_id": g.tenant_id,
         "user_id": g.user_id,
         "logged_at": logged_at,
+        "meal_items": meal_items,
     }
     for field in ("meal_type", "calories", "protein", "carbs", "fats"):
         if field in body:
@@ -48,7 +61,10 @@ def list_nutrition_logs():
         query = query.lte("logged_at", date_to)
 
     result = query.execute()
-    return jsonify({"nutrition_logs": result.data or []})
+    profile = get_user_nutrition_profile(sb, g.tenant_id, g.user_id)
+    metric = get_latest_body_metric(sb, g.tenant_id, g.user_id)
+    targets = calculate_targets(profile, metric)
+    return jsonify({"nutrition_logs": result.data or [], "targets": targets})
 
 
 @bp.route("/nutrition/<int:log_id>", methods=["GET"])
@@ -74,7 +90,7 @@ def get_nutrition_log(log_id):
 def update_nutrition_log(log_id):
     body = request.get_json(silent=True) or {}
     allowed = {}
-    for field in ("meal_type", "calories", "protein", "carbs", "fats", "logged_at"):
+    for field in ("meal_type", "calories", "protein", "carbs", "fats", "logged_at", "meal_items"):
         if field in body:
             allowed[field] = body[field]
     if not allowed:

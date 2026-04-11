@@ -948,6 +948,69 @@ body {
   transform: scale(0.995);
 }
 
+.nutrition-target-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.nutrition-ring-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.9rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nutrition-ring-svg {
+  transform: rotate(-90deg);
+}
+
+.nutrition-ring-track {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+.nutrition-ring-progress {
+  stroke: #6c63ff;
+  transition: stroke-dashoffset 0.35s ease;
+  stroke-linecap: round;
+}
+
+.nutrition-ring-value {
+  margin-top: -96px;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.nutrition-ring-value strong {
+  font-size: 1.55rem;
+  color: #fff;
+  line-height: 1;
+}
+
+.nutrition-ring-value span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.nutrition-ring-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.nutrition-ring-target {
+  margin: 0.22rem 0 0;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+}
+
 .nutrition-detail-grid,
 .metric-row-grid {
   margin-top: 0.65rem;

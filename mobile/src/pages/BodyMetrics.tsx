@@ -1,10 +1,14 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
+  apiGetBodyMetricsQuestionnaire,
+  apiUpdateBodyMetricsQuestionnaire,
   apiFetch,
   apiFetchJson,
   getApiCache,
   invalidateApiCache,
+  type BodyMetricsQuestionnaire,
+  type NutritionTargets,
 } from '../lib/api';
 
 const BodyMetricsChart = lazy(() => import('../components/charts/BodyMetricsChart'));
@@ -30,6 +34,14 @@ export default function BodyMetrics() {
   const [bodyFat, setBodyFat] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [questionnaire, setQuestionnaire] = useState<BodyMetricsQuestionnaire | null>(null);
+  const [recommendations, setRecommendations] = useState<NutritionTargets | null>(null);
+  const [editingQuestionnaire, setEditingQuestionnaire] = useState(false);
+  const [qSaving, setQSaving] = useState(false);
+  const [qAge, setQAge] = useState('');
+  const [qSex, setQSex] = useState<'male' | 'female'>('male');
+  const [qActivity, setQActivity] = useState<'sedentary' | 'light' | 'moderate' | 'very_active' | 'extra_active'>('moderate');
+  const [qGoal, setQGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
 
   function fetchMetrics() {
     if (!accessToken) return;
@@ -55,6 +67,24 @@ export default function BodyMetrics() {
   }
 
   useEffect(fetchMetrics, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    apiGetBodyMetricsQuestionnaire(accessToken)
+      .then((data) => {
+        setQuestionnaire(data.questionnaire);
+        setRecommendations(data.recommendations);
+        if (data.questionnaire) {
+          setQAge(String(data.questionnaire.age_years ?? ''));
+          setQSex(data.questionnaire.sex);
+          setQActivity(data.questionnaire.activity_level);
+          setQGoal(data.questionnaire.goal);
+        } else {
+          setEditingQuestionnaire(true);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load questionnaire'));
+  }, [accessToken]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -85,6 +115,39 @@ export default function BodyMetrics() {
     setShowForm(false);
     invalidateApiCache('/api/body-metrics', accessToken);
     fetchMetrics();
+    apiGetBodyMetricsQuestionnaire(accessToken)
+      .then((data) => {
+        setQuestionnaire(data.questionnaire);
+        setRecommendations(data.recommendations);
+      })
+      .catch(() => {});
+  }
+
+  async function handleQuestionnaireSave(e: FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    if (!qAge) {
+      setError('Age is required in the questionnaire.');
+      return;
+    }
+    setQSaving(true);
+    setError('');
+    try {
+      const response = await apiUpdateBodyMetricsQuestionnaire(accessToken, {
+        age_years: Number(qAge),
+        sex: qSex,
+        activity_level: qActivity,
+        goal: qGoal,
+      });
+      setQuestionnaire(response.questionnaire);
+      setRecommendations(response.recommendations);
+      setEditingQuestionnaire(false);
+      invalidateApiCache('/api/nutrition', accessToken);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save questionnaire');
+    } finally {
+      setQSaving(false);
+    }
   }
 
   const chartData = [...metrics]
@@ -119,6 +182,105 @@ export default function BodyMetrics() {
           <p className="empty-text" style={{ color: '#fca5a5' }}>{error}</p>
         </section>
       )}
+
+      <section className="section">
+        <div className="page-header-row" style={{ marginBottom: '0.75rem' }}>
+          <h2 style={{ margin: 0 }}>Daily Nutrition Recommendation</h2>
+          <button
+            type="button"
+            className="action-btn action-btn--sm"
+            onClick={() => setEditingQuestionnaire((prev) => !prev)}
+          >
+            {editingQuestionnaire ? 'Cancel' : questionnaire ? 'Edit Questionnaire' : 'Fill Questionnaire'}
+          </button>
+        </div>
+        <div className="card-grid" style={{ marginBottom: editingQuestionnaire ? '1rem' : 0 }}>
+          <div className="card">
+            <span className="card-label">Calories Needed / Day</span>
+            <span className="card-value">
+              {recommendations?.recommended_calories != null ? recommendations.recommended_calories : '--'}
+            </span>
+          </div>
+          <div className="card">
+            <span className="card-label">Protein Needed / Day</span>
+            <span className="card-value">
+              {recommendations?.recommended_protein_g != null ? `${recommendations.recommended_protein_g}g` : '--'}
+            </span>
+          </div>
+        </div>
+        {recommendations?.missing_fields?.length ? (
+          <p className="form-hint">
+            Missing inputs: {recommendations.missing_fields.join(', ')}. Complete questionnaire and body metrics to calculate targets.
+          </p>
+        ) : null}
+        {editingQuestionnaire && (
+          <form className="mobile-form" onSubmit={handleQuestionnaireSave} style={{ marginTop: '0.9rem' }}>
+            <div className="form-row-2">
+              <div className="form-group">
+                <label htmlFor="q-age">Age</label>
+                <input
+                  id="q-age"
+                  type="number"
+                  min="13"
+                  max="120"
+                  value={qAge}
+                  onChange={(e) => setQAge(e.target.value)}
+                  disabled={qSaving}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="q-sex">Sex</label>
+                <select
+                  id="q-sex"
+                  className="form-select"
+                  value={qSex}
+                  onChange={(e) => setQSex(e.target.value as 'male' | 'female')}
+                  disabled={qSaving}
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row-2">
+              <div className="form-group">
+                <label htmlFor="q-activity">Exercise Frequency</label>
+                <select
+                  id="q-activity"
+                  className="form-select"
+                  value={qActivity}
+                  onChange={(e) => setQActivity(e.target.value as typeof qActivity)}
+                  disabled={qSaving}
+                >
+                  <option value="sedentary">Sedentary (little/no exercise)</option>
+                  <option value="light">Light (1-3 days/week)</option>
+                  <option value="moderate">Moderate (3-5 days/week)</option>
+                  <option value="very_active">Very active (6-7 days/week)</option>
+                  <option value="extra_active">Extra active (2x/day or labor work)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="q-goal">Goal</label>
+                <select
+                  id="q-goal"
+                  className="form-select"
+                  value={qGoal}
+                  onChange={(e) => setQGoal(e.target.value as typeof qGoal)}
+                  disabled={qSaving}
+                >
+                  <option value="lose">Lose Weight</option>
+                  <option value="maintain">Maintain Weight</option>
+                  <option value="gain">Gain Muscle/Weight</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="login-btn" disabled={qSaving}>
+              {qSaving ? 'Saving...' : 'Save Questionnaire'}
+            </button>
+          </form>
+        )}
+      </section>
 
       {showForm && (
         <section className="section">

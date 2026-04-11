@@ -179,6 +179,59 @@ export interface FeedComment {
   updated_at: string;
 }
 
+export interface NutritionTargets {
+  recommended_calories: number | null;
+  recommended_protein_g: number | null;
+  is_estimate: boolean;
+  missing_fields: string[];
+  inputs_used: {
+    sex: string | null;
+    age_years: number | null;
+    activity_level: string | null;
+    goal: string | null;
+    weight_lbs: number | null;
+    height_inches: number | null;
+  };
+}
+
+export interface NutritionLogPayload {
+  logged_at: string;
+  meal_type?: string | null;
+  meal_items: string;
+  calories: number;
+  protein: number;
+  carbs?: number;
+  fats?: number;
+}
+
+export interface NutritionLogEntry {
+  id: number;
+  meal_type: string | null;
+  meal_items: string | null;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fats: number | null;
+  logged_at: string;
+}
+
+export interface NutritionLogsResponse {
+  nutrition_logs: NutritionLogEntry[];
+  targets: NutritionTargets;
+}
+
+export interface BodyMetricsQuestionnaire {
+  sex: 'male' | 'female';
+  age_years: number;
+  activity_level: 'sedentary' | 'light' | 'moderate' | 'very_active' | 'extra_active';
+  goal: 'lose' | 'maintain' | 'gain';
+}
+
+export interface BodyMetricsQuestionnaireResponse {
+  questionnaire: BodyMetricsQuestionnaire | null;
+  recommendations: NutritionTargets;
+}
+
 export async function apiSignup(
   email: string,
   password: string,
@@ -368,6 +421,67 @@ export async function apiCreateFeedComment(
     throw new Error(body.error || 'Unable to add comment');
   }
   return body.comment as FeedComment;
+}
+
+export async function apiGetNutritionLogs(
+  accessToken: string,
+): Promise<NutritionLogsResponse> {
+  const res = await apiFetch('/api/nutrition', accessToken);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || 'Unable to load nutrition logs');
+  }
+  return {
+    nutrition_logs: (body.nutrition_logs ?? []) as NutritionLogEntry[],
+    targets: (body.targets ?? {
+      recommended_calories: null,
+      recommended_protein_g: null,
+      is_estimate: true,
+      missing_fields: [],
+      inputs_used: {},
+    }) as NutritionTargets,
+  };
+}
+
+export async function apiCreateNutritionLog(
+  accessToken: string,
+  payload: NutritionLogPayload,
+): Promise<NutritionLogEntry> {
+  const res = await apiFetch('/api/nutrition', accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.nutrition_log) {
+    throw new Error(body.error || 'Unable to save nutrition log');
+  }
+  return body.nutrition_log as NutritionLogEntry;
+}
+
+export async function apiGetBodyMetricsQuestionnaire(
+  accessToken: string,
+): Promise<BodyMetricsQuestionnaireResponse> {
+  const res = await apiFetch('/api/body-metrics/questionnaire', accessToken);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || 'Unable to load questionnaire');
+  }
+  return body as BodyMetricsQuestionnaireResponse;
+}
+
+export async function apiUpdateBodyMetricsQuestionnaire(
+  accessToken: string,
+  payload: BodyMetricsQuestionnaire,
+): Promise<BodyMetricsQuestionnaireResponse> {
+  const res = await apiFetch('/api/body-metrics/questionnaire', accessToken, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || 'Unable to update questionnaire');
+  }
+  return body as BodyMetricsQuestionnaireResponse;
 }
 
 const TOKEN_KEY = 'aurafit_m_access_token';
